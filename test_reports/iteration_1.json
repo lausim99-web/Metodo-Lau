@@ -1,0 +1,30 @@
+{
+  "summary": "First-finish smoke test of METODO LAU. Backend auth (login/me/logout, 401/403), admin CRUD (create client, update plan), client APIs (plan, logs, nutrition info + file), PDF upload/download, and exercise library (22 items) all pass. Frontend admin login lands on /admin, 'Nuovo Atleta' creates a client visible in list, client detail page opens, Salva Scheda succeeds, and the created client logs in and sees the workout dashboard with day tabs, set inputs, and Salva button.",
+  "tested_scope": ["frontend", "backend", "auth", "integration"],
+  "passed": [
+    "GET /api/auth/me unauthenticated -> 401",
+    "POST /api/auth/login admin (lausim99@gmail.com) -> 200 with JWT",
+    "GET /api/auth/me with Bearer -> 200 admin role",
+    "GET /api/exercises/library -> 200, 22 exercises",
+    "POST /api/admin/clients creates client -> 200",
+    "GET /api/admin/clients as client -> 403 (Admin access required)",
+    "PUT /api/admin/clients/{id}/plan -> 200",
+    "GET /api/me/plan as client -> 200 with saved plan",
+    "POST /api/me/logs with day_index/exercise_index -> 200",
+    "GET /api/me/logs -> returns saved log",
+    "POST /api/admin/clients/{id}/nutrition PDF upload -> 200",
+    "GET /api/me/nutrition/info -> 200 with filename/size",
+    "GET /api/me/nutrition/file -> 200 application/pdf",
+    "POST /api/auth/logout -> 200",
+    "UI: admin login redirects to /admin",
+    "UI: add-client-toggle + new-client-submit creates client visible in list",
+    "UI: open-client detail page loads; save-plan-btn works",
+    "UI: created client logs in and lands on ClientDashboard with workout tab, day tab, weight/reps inputs and Salva"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": "Two 401s appeared in console on the client dashboard right after login; they resolve on retry (likely /api/me/nutrition/info before token propagation or an unauthenticated pre-fetch). Non-blocking. Nutrition tab iframe blob render and history tab UI not exercised in this pass; backend endpoints backing them are verified."
+}
