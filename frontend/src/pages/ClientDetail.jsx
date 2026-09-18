@@ -5,7 +5,8 @@ import { api, formatErr } from "../api";
 import { toast } from "sonner";
 import { ArrowLeft, Plus, Trash2, Upload, Save, FileText, ChevronDown, ChevronUp, Copy } from "lucide-react";
 
-const newExercise = () => ({ name: "", muscle_group: "", sets: 3, reps: "10", weight: "", rest_sec: 90, notes: "", gif_url: "" });
+const TIPOLOGIE = ["SERIE NORMALE", "PIRAMIDALE", "SUPER SERIE", "SUPER SET", "REST.P", "PEAK CONTRACTION", "STRIPPING"];
+const newExercise = () => ({ name: "", muscle_group: "", sets: 3, reps: "10", weight: "", rest_sec: 90, notes: "", gif_url: "", tipologia: "", video_url: "" });
 const newDay = (i) => ({ name: `Giorno ${i}`, exercises: [newExercise()] });
 
 export default function ClientDetail() {
@@ -159,6 +160,18 @@ export default function ClientDetail() {
                       <input type="number" placeholder="Rest sec" value={ex.rest_sec}
                         onChange={(e) => updateEx(di, ei, { rest_sec: Number(e.target.value) || 0 })}
                         className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-2 py-2 text-sm text-white" />
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2 mt-2">
+                      <select value={ex.tipologia || ""}
+                        onChange={(e) => updateEx(di, ei, { tipologia: e.target.value })}
+                        data-testid={`plan-ex-tipologia-${di}-${ei}`}
+                        className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-2 py-2 text-sm text-white">
+                        <option value="">Tipologia (opzionale)</option>
+                        {TIPOLOGIE.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <input placeholder="Link video (opzionale)" value={ex.video_url || ""}
+                        onChange={(e) => updateEx(di, ei, { video_url: e.target.value })}
+                        className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
                     </div>
                     <input placeholder="Note del PT (tecnica, tempo, ecc.)" value={ex.notes || ""}
                       onChange={(e) => updateEx(di, ei, { notes: e.target.value })}

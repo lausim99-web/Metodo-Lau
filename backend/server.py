@@ -149,6 +149,8 @@ class ExerciseIn(BaseModel):
     rest_sec: int = 90
     notes: Optional[str] = ""
     gif_url: Optional[str] = ""
+    tipologia: Optional[str] = ""
+    video_url: Optional[str] = ""
 
 class WorkoutDayIn(BaseModel):
     name: str

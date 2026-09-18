@@ -3,7 +3,7 @@ import AppShell from "../components/AppShell";
 import { api, formatErr, getToken, API } from "../api";
 import { useAuth } from "../auth";
 import { toast } from "sonner";
-import { Dumbbell, Utensils, History, Play, Check, Timer, Info } from "lucide-react";
+import { Dumbbell, Utensils, History, Play, Check, Timer, Info, Video } from "lucide-react";
 
 const TABS = [
   { key: "workout", label: "Allenamento", icon: Dumbbell },
@@ -56,12 +56,24 @@ function ExerciseCard({ dayIdx, exIdx, ex, onLog }) {
   return (
     <div className={`lau-card p-4 sm:p-5 lau-in ${allDone ? "border-yellow-500/60" : ""}`} data-testid={`exercise-card-${dayIdx}-${exIdx}`}>
       <div className="flex items-start justify-between gap-3 mb-3">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.25em] text-yellow-400 font-mono-num">{ex.muscle_group || "Esercizio"}</div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] uppercase tracking-[0.25em] text-yellow-400 font-mono-num">{ex.muscle_group || "Esercizio"}</span>
+            {ex.tipologia && (
+              <span className="text-[10px] uppercase tracking-widest font-mono-num px-2 py-0.5 rounded bg-yellow-400/15 text-yellow-400 border border-yellow-500/30">
+                {ex.tipologia}
+              </span>
+            )}
+          </div>
           <h3 className="font-display font-black text-xl uppercase text-white leading-tight">{ex.name}</h3>
-          <div className="text-xs text-zinc-400 mt-1">
-            <span className="font-mono-num text-white">{ex.sets}</span> serie × <span className="font-mono-num text-white">{ex.reps}</span> reps
-            {ex.weight && <> · <span className="font-mono-num text-white">{ex.weight}</span></>}
+          <div className="text-xs text-zinc-400 mt-1 flex items-center gap-2 flex-wrap">
+            <span><span className="font-mono-num text-white">{ex.sets}</span> serie × <span className="font-mono-num text-white">{ex.reps}</span> reps</span>
+            {ex.weight && <span>· <span className="font-mono-num text-white">{ex.weight}</span></span>}
+            {ex.video_url && (
+              <a href={ex.video_url} target="_blank" rel="noreferrer" className="text-yellow-400 hover:text-yellow-300 inline-flex items-center gap-1" data-testid={`video-${dayIdx}-${exIdx}`}>
+                <Video size={12} /> Video
+              </a>
+            )}
           </div>
         </div>
         <RestTimer seconds={ex.rest_sec || 90} />
