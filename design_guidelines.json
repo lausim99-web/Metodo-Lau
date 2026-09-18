@@ -1,0 +1,82 @@
+{
+  "project_name": "METODO LAU",
+  "theme_archetype": "ARCHETYPE 2: THE PERFORMANCE PRO & WARRIOR TACTICAL",
+  "emotional_tone": "Gritty, powerful, authoritative, athletic, warrior-focused fitness & nutrition",
+  "logo_config": {
+    "url": "https://customer-assets-rejwkqb3.emergentagent.net/job_63076ffe-16be-493b-860d-ec786a6fd21a/artifacts/swqgbggz_IMG_2767.jpeg",
+    "mascot": "Viking Warrior with Mace (#METODOLAU)",
+    "display_technique": "Display inside rounded avatar container with dark background filter or mix-blend-mode: multiply / darken / dark circle clipping with electric gold border ring to blend seamlessly with dark mode"
+  },
+  "colors": {
+    "base_background": "#0A0A0D",
+    "surface_card": "#121218",
+    "surface_elevated": "#1A1A24",
+    "border_subtle": "#262633",
+    "border_active": "#F5C518",
+    "primary_accent": "#F5C518",
+    "primary_accent_hover": "#E0B20D",
+    "secondary_accent": "#FF9900",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A1A1AA",
+    "text_muted": "#6B7280",
+    "status_success": "#22C55E",
+    "status_warning": "#F59E0B",
+    "status_danger": "#EF4444",
+    "status_info": "#3B82F6",
+    "badge_bg": "rgba(245, 197, 24, 0.15)",
+    "forbidden_colors": ["#7351B7", "#1B93A4", "soft pastel gradients", "white backgrounds"]
+  },
+  "typography": {
+    "heading_font": "Barlow Condensed, Outfit, sans-serif",
+    "body_font": "Plus Jakarta Sans, Inter, sans-serif",
+    "numeric_font": "JetBrains Mono, Barlow, monospace",
+    "scale": {
+      "h1_hero": "text-3xl sm:text-4xl lg:text-5xl font-black uppercase tracking-wider",
+      "h2_section": "text-2xl sm:text-3xl font-extrabold uppercase tracking-wide",
+      "h3_card": "text-lg sm:text-xl font-bold uppercase",
+      "body_text": "text-sm sm:text-base text-zinc-300 leading-relaxed",
+      "caption_label": "text-xs uppercase font-mono tracking-widest text-yellow-400/90"
+    }
+  },
+  "responsive": {
+    "breakpoint": "mobile-first (320px+ phone viewport prioritization)",
+    "layout": "Bottom fixed navigation on mobile for Clients, vertical sticky sidebar on desktop for PT Admin. Single column stacked workout cards on mobile, 2-3 column grids on lg screens.",
+    "typography": "Mobile-first type scale with clamp() or Tailwind responsive classes. Input fields with text-base (16px) to avoid iOS Safari auto-zoom.",
+    "overflow_guard": "Ensure max-w-full overflow-x-hidden on root container. Use flex-shrink-0 for scrollable exercise series horizontal tabs.",
+    "tap_targets": "Minimum 48px by 48px touch targets for exercise checkmarks, set counter buttons (+/-), and tab items."
+  },
+  "grids_and_layouts": {
+    "bento_dashboard": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6",
+    "workout_deck": "flex flex-col gap-4 sm:gap-6 w-full max-w-3xl mx-auto",
+    "padding_system": "p-4 sm:p-6 md:p-8",
+    "card_radius": "rounded-xl border border-zinc-800 bg-zinc-900/90 shadow-2xl backdrop-blur-md hover:border-yellow-500/50 transition-all duration-200"
+  },
+  "components_architecture": {
+    "Auth": "Login component with Email + Password, Role selection (Client / Personal Trainer), mock login toggle for demo testing.",
+    "Navigation": "Header with Viking Mascot logo (#METODOLAU), role badge, user profile menu, and mobile bottom tab bar (Today's Workout, Nutrition Plan, History, Profile for Client; Clients, Assign Workouts, Upload PDF, Analytics for PT Admin).",
+    "InteractiveWorkoutCard": "Core client component: Exercise title, muscle group tag, animated demo thumbnail/GIF toggle, PT target notes, set counter rows (Set #, Previous Weight/Reps, Current Weight input, Current Reps input, Checkbox done), REST Timer countdown trigger with sound/vibration pulse effect, exercise notes input field.",
+    "NutritionPdfViewer": "In-browser PDF viewer / simulated canvas document showing macro splits (Calories, Protein, Carbs, Fats), daily meal schedule (Breakfast, Lunch, Dinner, Snacks), hydration goal, and PT comments with download/print trigger.",
+    "PTClientManagement": "PT Admin table & card view listing all clients, workout compliance stats, last active workout date, button to edit/assign workout schedule, upload new nutrition plan PDF, and message client.",
+    "ExerciseLibrary": "Searchable list of 20+ exercises with categories (Chest, Back, Legs, Shoulders, Arms, Core) with GIF previews and target set/rep templates for PT to easily pick and build plans.",
+    "ProgressTracking": "Visual graphs for weight lifted progress over time, completed workout streak, bodyweight logs, and macro completion ring."
+  },
+  "image_urls": {
+    "mascot_logo": "https://customer-assets-rejwkqb3.emergentagent.net/job_63076ffe-16be-493b-860d-ec786a6fd21a/artifacts/swqgbggz_IMG_2767.jpeg",
+    "hero_gym": "https://images.unsplash.com/photo-1641337221253-fdc7237f6b61?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwxfHxib2R5YnVpbGRlciUyMGd5bSUyMHRyYWluaW5nJTIwaW50ZW5zZSUyMHdvcmtvdXR8ZW58MHx8fHwxNzg5NzY2Njk2fDA&ixlib=rb-4.1.0&q=85",
+    "workout_rope": "https://images.unsplash.com/photo-1669322779651-5ca89652492e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwzfHxib2R5YnVpbGRlciUyMGd5bSUyMHRyYWluaW5nJTIwaW50ZW5zZSUyMHdvcmtvdXR8ZW58MHx8fHwxNzg5NzY2Njk2fDA&ixlib=rb-4.1.0&q=85",
+    "dumbbell_workout": "https://images.unsplash.com/photo-1683587056272-4f7f0abb1b38?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwyfHxib2R5YnVpbGRlciUyMGd5bSUyMHRyYWluaW5nJTIwaW50ZW5zZSUyMHdvcmtvdXR8ZW58MHx8fHwxNzg5NzY2Njk2fDA&ixlib=rb-4.1.0&q=85",
+    "nutrition_meal_prep": "https://images.unsplash.com/photo-1543352632-5a4b24e4d2a6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwxfHxoZWFsdGh5JTIwbWVhbCUyMHByZXAlMjBmaXRuZXNzJTIwbnV0cml0aW9uJTIwZm9vZHxlbnwwfHx8fDE3ODk3NjY3MDV8MA&ixlib=rb-4.1.0&q=85",
+    "nutrition_salmon_bowl": "https://images.pexels.com/photos/4929677/pexels-photo-4929677.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+    "pt_trainer_avatar": "https://images.pexels.com/photos/11241446/pexels-photo-11241446.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+  },
+  "instructions_to_main_agent": [
+    "Build a modern, warrior-themed high-performance web app for METODO LAU in dark theme (#0A0A0D base, #F5C518 gold accent).",
+    "Use the provided logo URL (https://customer-assets-rejwkqb3.emergentagent.net/job_63076ffe-16be-493b-860d-ec786a6fd21a/artifacts/swqgbggz_IMG_2767.jpeg) in the header and auth hero screen, using dark circle overlay / mix-blend / rounded border styling so it integrates without awkward white blockiness.",
+    "Implement two user views: Client Dashboard (Interactive Workout Execution with sets/reps logging, completion checkmarks, rest timer, PT notes, nutrition PDF view, workout history) and Personal Trainer Admin Dashboard (Client roster, add new client, create/assign workout plan, upload PDF nutrition plan, monitor client logs).",
+    "Include quick account switching between PT (Admin) and Client (e.g. 'Log in as PT' vs 'Log in as Marco - Client') for easy demonstration and evaluation.",
+    "Ensure all interactive elements have data-testid attributes (e.g., data-testid='login-submit-button', data-testid='exercise-check-0', data-testid='add-set-btn', data-testid='pt-add-client-btn').",
+    "Make the UI mobile-first with a fixed bottom navigation bar on small viewports and responsive touch targets (>= 48px).",
+    "Use Sonner for toasts (exercise completed, plan saved, PDF uploaded, rest timer finished).",
+    "Provide rich mock data with pre-filled Italian workout plans (e.g., 'Scheda A - Push & Quad', 'Scheda B - Pull & Hamstrings', 'Piano Alimentare Ipertrofia 2500 kcal') to make the experience feel authentic for an Italian personal trainer."
+  ]
+}
