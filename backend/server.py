@@ -418,14 +418,23 @@ async def create_client(body: CreateClientIn, _: dict = Depends(require_admin)):
 
 @api.get("/admin/clients")
 async def list_clients(_: dict = Depends(require_admin)):
-    out = []
+    clients = []
     async for u in db.users.find({"role": "client"}).sort("created_at", -1):
-        plan = await db.plans.find_one({"user_id": str(u["_id"])})
-        nut = await db.nutrition.find_one({"user_id": str(u["_id"])})
-        out.append({"id": str(u["_id"]), "email": u["email"], "name": u["name"],
-                    "has_plan": bool(plan), "has_nutrition": bool(nut),
-                    "created_at": u.get("created_at")})
-    return out
+        clients.append(u)
+    if not clients:
+        return []
+    ids = [str(u["_id"]) for u in clients]
+    # 2 bulk queries instead of N+1: which clients have workout PDFs / nutrition PDFs
+    plan_ids = set()
+    async for d in db.workouts.find({"user_id": {"$in": ids}}, {"user_id": 1}):
+        plan_ids.add(d["user_id"])
+    nut_ids = set()
+    async for d in db.nutrition.find({"user_id": {"$in": ids}}, {"user_id": 1}):
+        nut_ids.add(d["user_id"])
+    return [{"id": str(u["_id"]), "email": u["email"], "name": u["name"],
+             "has_plan": str(u["_id"]) in plan_ids,
+             "has_nutrition": str(u["_id"]) in nut_ids,
+             "created_at": u.get("created_at")} for u in clients]
 
 @api.get("/admin/clients/{client_id}")
 async def get_client(client_id: str, _: dict = Depends(require_admin)):
@@ -529,7 +538,7 @@ async def upload_nutrition(client_id: str, title: str = Form(""), file: UploadFi
 
 async def _list_files(collection, user_id: str):
     out = []
-    async for f in collection.find({"user_id": user_id}).sort("uploaded_at", -1):
+    async for f in collection.find({"user_id": user_id}).sort("uploaded_at", -1).limit(100):
         f.pop("_id", None)
         out.append(f)
     return out
@@ -675,7 +684,7 @@ async def upload_photo(client_id: str, tag: str = Form("prima"), photo_date: str
 
 async def _list_photos(user_id: str):
     out = []
-    async for p in db.photos.find({"user_id": user_id}).sort([("photo_date", -1), ("uploaded_at", -1)]):
+    async for p in db.photos.find({"user_id": user_id}).sort([("photo_date", -1), ("uploaded_at", -1)]).limit(100):
         p.pop("_id", None); out.append(p)
     return out
 
@@ -736,7 +745,7 @@ async def add_progress(client_id: str, body: ProgressIn, _: dict = Depends(requi
 
 async def _list_progress(user_id: str):
     out = []
-    async for p in db.progress.find({"user_id": user_id}).sort("date", -1):
+    async for p in db.progress.find({"user_id": user_id}).sort("date", -1).limit(200):
         p.pop("_id", None); out.append(p)
     return out
 
