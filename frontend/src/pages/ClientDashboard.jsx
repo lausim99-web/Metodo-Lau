@@ -219,18 +219,48 @@ function ProgressTab() {
 export default function ClientDashboard() {
   const { user } = useAuth();
   const [tab, setTab] = useState("workouts");
+  const [badges, setBadges] = useState({ workouts: 0, nutrition: 0 });
+
+  const loadBadges = async () => {
+    try {
+      const r = await api.get("/me/notifications");
+      setBadges(r.data);
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadBadges();
+    const iv = setInterval(loadBadges, 30000);
+    return () => clearInterval(iv);
+  }, []);
+
+  const openTab = async (key) => {
+    setTab(key);
+    if (key === "workouts" || key === "nutrition") {
+      try {
+        await api.post(`/me/notifications/seen/${key}`);
+        setBadges((b) => ({ ...b, [key]: 0 }));
+      } catch {}
+    }
+  };
 
   return (
     <AppShell title={`Ciao, ${user?.name?.split(" ")[0] || "Atleta"}`}>
       <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar" data-testid="main-tabs">
         {TABS.map((t) => {
           const Icon = t.icon; const active = tab === t.key;
+          const count = badges[t.key] || 0;
           return (
-            <button key={t.key} onClick={() => setTab(t.key)} data-testid={`tab-${t.key}`}
-                    className={`shrink-0 flex items-center gap-2 px-5 py-3 rounded-lg font-display font-bold uppercase tracking-wider text-sm transition border ${
+            <button key={t.key} onClick={() => openTab(t.key)} data-testid={`tab-${t.key}`}
+                    className={`relative shrink-0 flex items-center gap-2 px-5 py-3 rounded-lg font-display font-bold uppercase tracking-wider text-sm transition border ${
                       active ? "bg-yellow-400 text-black border-yellow-400" : "border-[#262633] text-zinc-300 hover:border-yellow-500/50"
                     }`}>
               <Icon size={16} /> {t.label}
+              {count > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center" data-testid={`badge-${t.key}`}>
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}

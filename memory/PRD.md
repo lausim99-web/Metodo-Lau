@@ -19,6 +19,9 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - Profilo con cambio password per entrambi i ruoli
 - Demo client "Mario Rossi" (mario.rossi@example.com / Mario2026!) seedato via /app/scripts/seed_mario.py con 1 scheda PDF, 1 piano alimentare PDF, 3 foto AI, 5 rilevazioni BIA
 - Notifica email automatica (Resend gestito, EMERGENT_EMAIL_KEY) all'atleta quando il PT carica nuova scheda o piano alimentare — template branded METODO LAU con link app; fire-and-forget via asyncio.create_task
+- Email di benvenuto automatica quando il PT crea un nuovo atleta (senza password per guardrail G2, invita a contattare il PT)
+- Badge notifica in-app (rosso con conteggio) sui tab Schede/Alimentazione per upload non visti; polling 30s + mark-seen all'apertura tab
+- PWA installabile: manifest.json, service worker minimo, icone logo 192/512, meta iOS/Android, titolo "METODO LAU"
 - PDF aperti inline in nuova scheda via ?auth= token query param
 - Logo mascotte con crop rounded-full (sfondo bianco eliminato via overflow-hidden + scale)
 - Testing: iterazione 1 e 2 al 100% pass backend + frontend

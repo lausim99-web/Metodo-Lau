@@ -210,6 +210,31 @@ async def notify_client_upload(client_id: str, kind_label: str, title: str):
     except Exception as e:
         logger.error(f"notify_client_upload failed: {e}")
 
+async def send_welcome_email(email: str, name: str):
+    """Welcome email when PT creates a new client. Never includes the password (G2) —
+    the PT shares credentials personally."""
+    try:
+        subject = f"Benvenuto in {EMAIL_FROM_NAME}"
+        html = (
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
+            '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
+            'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
+            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODO LAU</div>'
+            f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">Benvenuto, {escape(name)}</h1>'
+            '<p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:0 0 8px">Il tuo Personal Trainer ha creato il tuo account METODO LAU.</p>'
+            f'<p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:0 0 16px">Accedi con la tua email (<strong style="color:#fff">{escape(email)}</strong>) '
+            'e la password che il tuo PT ti ha comunicato personalmente.</p>'
+            f'<a href="{APP_URL}" style="display:inline-block;background:#F5C518;color:#0A0A0D;font-weight:bold;font-size:14px;'
+            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app METODO LAU</a>'
+            '<p style="color:#a1a1aa;font-size:13px;line-height:1.6;margin:20px 0 0">Dentro trovi la tua scheda di allenamento, il piano alimentare, '
+            'le foto dei progressi e le tue rilevazioni.</p>'
+            f'<p style="color:#52525b;font-size:12px;margin:24px 0 0">Inviata da {escape(EMAIL_FROM_NAME)}. Non chiediamo mai password o dati di pagamento via email.</p>'
+            '</td></tr></table></td></tr></table>'
+        )
+        await send_email(to=email, subject=subject, html=html)
+    except Exception as e:
+        logger.error(f"send_welcome_email failed: {e}")
+
 # ---------- Auth Helpers ----------
 def hash_password(p: str) -> str:
     return bcrypt.hashpw(p.encode(), bcrypt.gensalt()).decode()
@@ -251,6 +276,20 @@ async def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if user.get("role") != "admin":
         raise HTTPException(403, "Admin access required")
     return user
+
+# ---------- In-app notification badges ----------
+@api.get("/me/notifications")
+async def my_notifications(user: dict = Depends(get_current_user)):
+    w = await db.workouts.count_documents({"user_id": user["id"], "seen": False})
+    n = await db.nutrition.count_documents({"user_id": user["id"], "seen": False})
+    return {"workouts": w, "nutrition": n}
+
+@api.post("/me/notifications/seen/{kind}")
+async def mark_seen(kind: str, user: dict = Depends(get_current_user)):
+    if kind not in ("workouts", "nutrition"):
+        raise HTTPException(400, "Tipo non valido")
+    await getattr(db, kind).update_many({"user_id": user["id"]}, {"$set": {"seen": True}})
+    return {"ok": True}
 
 # ---------- Models ----------
 class LoginIn(BaseModel):
@@ -365,6 +404,7 @@ async def create_client(body: CreateClientIn, _: dict = Depends(require_admin)):
            "name": body.name, "role": "client",
            "created_at": datetime.now(timezone.utc).isoformat()}
     r = await db.users.insert_one(doc)
+    asyncio.create_task(send_welcome_email(email, body.name))
     return {"id": str(r.inserted_id), "email": email, "name": body.name, "role": "client"}
 
 @api.get("/admin/clients")
@@ -471,7 +511,7 @@ async def upload_nutrition(client_id: str, title: str = Form(""), file: UploadFi
     result = put_object(path, data, "application/pdf")
     doc = {"id": str(uuid.uuid4()), "user_id": client_id, "storage_path": result["path"],
            "filename": file.filename, "title": title or file.filename,
-           "size": result.get("size", len(data)),
+           "size": result.get("size", len(data)), "seen": False,
            "uploaded_at": datetime.now(timezone.utc).isoformat()}
     await db.nutrition.insert_one(doc)
     doc.pop("_id", None)
@@ -574,7 +614,7 @@ async def upload_workout(client_id: str, title: str = Form(""), file: UploadFile
     result = put_object(path, data, "application/pdf")
     doc = {"id": str(uuid.uuid4()), "user_id": client_id, "storage_path": result["path"],
            "filename": file.filename, "title": title or file.filename,
-           "size": result.get("size", len(data)),
+           "size": result.get("size", len(data)), "seen": False,
            "uploaded_at": datetime.now(timezone.utc).isoformat()}
     await db.workouts.insert_one(doc)
     doc.pop("_id", None)
