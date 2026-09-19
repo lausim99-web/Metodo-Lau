@@ -187,6 +187,13 @@ class ProgressIn(BaseModel):
     bia_bmi: Optional[float] = None
     notes: Optional[str] = ""
 
+class ContactsIn(BaseModel):
+    instagram: Optional[str] = ""
+    whatsapp: Optional[str] = ""
+    phone: Optional[str] = ""
+    email: Optional[str] = ""
+    note: Optional[str] = ""
+
 # ---------- Cookie helper ----------
 def set_auth_cookie(resp: Response, token: str):
     resp.set_cookie("access_token", token, httponly=True, secure=True,
@@ -550,6 +557,17 @@ async def delete_progress(entry_id: str, _: dict = Depends(require_admin)):
     if r.deleted_count == 0:
         raise HTTPException(404, "Voce non trovata")
     return {"ok": True}
+
+# ---------- PT Contacts (admin-editable, read-only for clients) ----------
+@api.get("/contacts")
+async def get_contacts(user: dict = Depends(get_current_user)):
+    s = await db.settings.find_one({"key": "contacts"})
+    return s["value"] if s else {"instagram": "", "whatsapp": "", "phone": "", "email": "", "note": ""}
+
+@api.put("/admin/contacts")
+async def set_contacts(body: ContactsIn, _: dict = Depends(require_admin)):
+    await db.settings.update_one({"key": "contacts"}, {"$set": {"key": "contacts", "value": body.model_dump()}}, upsert=True)
+    return body.model_dump()
 
 # ---------- Exercise Library ----------
 DEFAULT_EXERCISES = [

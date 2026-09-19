@@ -3,7 +3,54 @@ import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { api, formatErr } from "../api";
 import { toast } from "sonner";
-import { UserPlus, Users, ArrowRight, Trash2, KeyRound } from "lucide-react";
+import { UserPlus, Users, ArrowRight, Trash2, KeyRound, Instagram, MessageCircle, Phone, Mail, Save } from "lucide-react";
+
+function ContactsEditor() {
+  const [f, setF] = useState({ instagram: "", whatsapp: "", phone: "", email: "", note: "" });
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.get("/contacts").then((r) => setF(r.data)).catch(() => {}); }, []);
+  const save = async (e) => {
+    e.preventDefault(); setBusy(true);
+    try { await api.put("/admin/contacts", f); toast.success("Contatti salvati"); }
+    catch (e) { toast.error(formatErr(e)); }
+    setBusy(false);
+  };
+  return (
+    <form onSubmit={save} className="lau-card p-5 mb-6 space-y-3">
+      <div className="font-display font-bold uppercase text-white">I tuoi contatti (visibili a tutti gli atleti)</div>
+      <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4">
+        <div className="flex items-center gap-2 bg-[#0A0A0D] border border-[#262633] rounded px-3">
+          <Instagram size={14} className="text-yellow-400 shrink-0" />
+          <input placeholder="@metodolau" value={f.instagram || ""} onChange={(e) => setF({ ...f, instagram: e.target.value })}
+                 data-testid="contacts-instagram" className="flex-1 bg-transparent outline-none py-2 text-sm text-white min-w-0" />
+        </div>
+        <div className="flex items-center gap-2 bg-[#0A0A0D] border border-[#262633] rounded px-3">
+          <MessageCircle size={14} className="text-yellow-400 shrink-0" />
+          <input placeholder="+39 333..." value={f.whatsapp || ""} onChange={(e) => setF({ ...f, whatsapp: e.target.value })}
+                 data-testid="contacts-whatsapp" className="flex-1 bg-transparent outline-none py-2 text-sm text-white min-w-0" />
+        </div>
+        <div className="flex items-center gap-2 bg-[#0A0A0D] border border-[#262633] rounded px-3">
+          <Phone size={14} className="text-yellow-400 shrink-0" />
+          <input placeholder="+39 333..." value={f.phone || ""} onChange={(e) => setF({ ...f, phone: e.target.value })}
+                 data-testid="contacts-phone" className="flex-1 bg-transparent outline-none py-2 text-sm text-white min-w-0" />
+        </div>
+        <div className="flex items-center gap-2 bg-[#0A0A0D] border border-[#262633] rounded px-3">
+          <Mail size={14} className="text-yellow-400 shrink-0" />
+          <input placeholder="email@dominio.it" value={f.email || ""} onChange={(e) => setF({ ...f, email: e.target.value })}
+                 data-testid="contacts-email" className="flex-1 bg-transparent outline-none py-2 text-sm text-white min-w-0" />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <input placeholder="Nota per gli atleti (opz.)" value={f.note || ""} onChange={(e) => setF({ ...f, note: e.target.value })}
+               data-testid="contacts-note"
+               className="flex-1 bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
+        <button disabled={busy} type="submit" data-testid="contacts-save" className="lau-gold-btn px-4 rounded text-sm flex items-center gap-2">
+          <Save size={14} /> {busy ? "..." : "Salva"}
+        </button>
+      </div>
+    </form>
+  );
+}
 
 export default function AdminDashboard() {
   const nav = useNavigate();
@@ -49,6 +96,7 @@ export default function AdminDashboard() {
 
   return (
     <AppShell title="Gestione Atleti">
+      <ContactsEditor />
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2 text-zinc-400">
           <Users size={18} className="text-yellow-400" />

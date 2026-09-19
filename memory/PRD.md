@@ -14,11 +14,12 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 
 ## Implemented (2026-02)
 - Auth login/logout/me con seed admin da .env (lausim99@gmail.com / MetodoLau2026!)
-- Admin: CRUD clienti, reset password, editor scheda multi-giorno con libreria 22 esercizi, upload PDF piano alimentare
-- Client: tabs Allenamento / Alimentazione / Cronologia; card esercizio interattiva con rest-timer, checkbox serie, salvataggio log; PDF viewer via blob (iframe) con download
-- Tipologia esercizio (SERIE NORMALE, PIRAMIDALE, SUPER SERIE, SUPER SET, REST.P, PEAK CONTRACTION, STRIPPING) + link video opzionale
+- Admin: CRUD clienti, reset password, upload PDF schede+alimentazione (con storico), foto prima/check/dopo con data, progressi peso+BIA, editor contatti PT
+- Client: tabs Schede / Alimentazione / Foto / Progressi; viewer PDF in-app con download; galleria foto; dashboard progressi con grafico recharts (metrica cliccabile); card contatti PT (Instagram, WhatsApp, telefono, email)
+- Profilo con cambio password per entrambi i ruoli
+- Demo client "Mario Rossi" (mario.rossi@example.com / Mario2026!) seedato via /app/scripts/seed_mario.py con 1 scheda PDF, 1 piano alimentare PDF, 3 foto AI, 5 rilevazioni BIA
 - Logo mascotte con crop rounded-full (sfondo bianco eliminato via overflow-hidden + scale)
-- Testing agent iterazione 1: 100% pass backend + frontend
+- Testing: iterazione 1 e 2 al 100% pass backend + frontend
 
 ## Backlog (P1)
 - Cambio password lato atleta dopo primo login

@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import AppShell from "../components/AppShell";
+import ContactCard from "../components/ContactCard";
 import { api, API, getToken, formatErr } from "../api";
 import { useAuth } from "../auth";
 import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
 const TABS = [
   { key: "workouts", label: "Schede", icon: Dumbbell },
@@ -123,6 +125,7 @@ function PhotosTab() {
 
 function ProgressTab() {
   const [items, setItems] = useState([]);
+  const [metric, setMetric] = useState("weight_kg");
   useEffect(() => { api.get("/me/progress").then((r) => setItems(r.data)).catch(() => {}); }, []);
   if (!items.length) return (
     <div className="lau-card p-8 text-center">
@@ -132,24 +135,71 @@ function ProgressTab() {
     </div>
   );
   const latest = items[0];
+  const METRICS = [
+    { k: "weight_kg", label: "Peso", unit: "kg", color: "#F5C518" },
+    { k: "bia_fat", label: "Grasso", unit: "%", color: "#FF6B6B" },
+    { k: "bia_muscle", label: "Muscolo", unit: "%", color: "#4ADE80" },
+    { k: "bia_water", label: "Acqua", unit: "%", color: "#38BDF8" },
+    { k: "bia_bmi", label: "BMI", unit: "", color: "#C084FC" },
+  ];
+  const activeMetric = METRICS.find((m) => m.k === metric);
+  // build ascending chronological data for chart, keeping only entries where metric is present
+  const chartData = [...items]
+    .slice()
+    .reverse()
+    .filter((p) => p[metric] != null)
+    .map((p) => ({ date: p.date, value: Number(p[metric]) }));
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {[
-          { k: "weight_kg", label: "Peso", unit: "kg" },
-          { k: "bia_fat", label: "Grasso", unit: "%" },
-          { k: "bia_muscle", label: "Muscolo", unit: "%" },
-          { k: "bia_water", label: "Acqua", unit: "%" },
-          { k: "bia_bmi", label: "BMI", unit: "" },
-        ].map((m) => (
-          <div key={m.k} className="lau-card p-3 text-center lau-in">
-            <div className="text-[10px] uppercase tracking-widest text-yellow-400 font-mono-num">{m.label}</div>
+        {METRICS.map((m) => (
+          <button key={m.k} onClick={() => setMetric(m.k)} data-testid={`metric-${m.k}`}
+                  className={`lau-card p-3 text-center lau-in transition ${metric === m.k ? "border-yellow-500/70" : ""}`}>
+            <div className="text-[10px] uppercase tracking-widest font-mono-num" style={{ color: m.color }}>{m.label}</div>
             <div className="font-display font-black text-2xl text-white">
               {latest[m.k] ?? "-"}<span className="text-sm text-zinc-400 ml-1">{latest[m.k] != null ? m.unit : ""}</span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
+
+      <div className="lau-card p-4" data-testid="progress-chart">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.25em] font-mono-num" style={{ color: activeMetric.color }}>Andamento</div>
+            <div className="font-display font-bold uppercase text-white">{activeMetric.label} <span className="text-zinc-500 text-sm">({activeMetric.unit || "—"})</span></div>
+          </div>
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono-num">
+            {chartData.length} rilevazion{chartData.length === 1 ? "e" : "i"}
+          </div>
+        </div>
+        {chartData.length < 2 ? (
+          <div className="h-48 flex items-center justify-center text-sm text-zinc-500 text-center px-4">
+            Servono almeno 2 rilevazioni con questo dato per vedere la curva.
+          </div>
+        ) : (
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+                <CartesianGrid stroke="#262633" strokeDasharray="3 3" />
+                <XAxis dataKey="date" stroke="#6B7280" fontSize={11} tickFormatter={(d) => {
+                  try { return new Date(d).toLocaleDateString("it-IT", { day: "2-digit", month: "short" }); } catch { return d; }
+                }} />
+                <YAxis stroke="#6B7280" fontSize={11} domain={["auto", "auto"]} />
+                <Tooltip
+                  contentStyle={{ background: "#121218", border: "1px solid #262633", borderRadius: 8, color: "#fff" }}
+                  labelStyle={{ color: "#F5C518", fontFamily: "JetBrains Mono, monospace", fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase" }}
+                  formatter={(v) => [`${v}${activeMetric.unit ? " " + activeMetric.unit : ""}`, activeMetric.label]}
+                />
+                <Line type="monotone" dataKey="value" stroke={activeMetric.color} strokeWidth={2.5}
+                      dot={{ r: 4, fill: activeMetric.color, stroke: "#0A0A0D", strokeWidth: 2 }}
+                      activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
       <div className="lau-card p-4 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -205,6 +255,9 @@ export default function ClientDashboard() {
       {tab === "nutrition" && <PdfList endpoint="/me/nutrition/list" kind="nutrition" />}
       {tab === "photos" && <PhotosTab />}
       {tab === "progress" && <ProgressTab />}
+      <div className="mt-6">
+        <ContactCard />
+      </div>
     </AppShell>
   );
 }
