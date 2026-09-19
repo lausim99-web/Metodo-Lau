@@ -1,7 +1,7 @@
 import React from "react";
 import Logo from "./Logo";
 import { useAuth } from "../auth";
-import { LogOut } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function AppShell({ children, title }) {
@@ -27,6 +27,14 @@ export default function AppShell({ children, title }) {
                 <span className="text-sm font-bold text-white truncate max-w-[180px]" data-testid="header-user-name">{user.name}</span>
               </div>
             )}
+            <button
+              onClick={() => nav("/profile")}
+              data-testid="profile-btn"
+              title="Profilo"
+              className="p-2 rounded-lg border border-[#262633] hover:border-yellow-500/60 text-zinc-200 transition"
+            >
+              <User size={16} />
+            </button>
             <button
               onClick={logout}
               data-testid="logout-btn"

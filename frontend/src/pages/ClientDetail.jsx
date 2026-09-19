@@ -1,68 +1,292 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../components/AppShell";
-import { api, formatErr } from "../api";
+import { api, formatErr, API, getToken } from "../api";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Trash2, Upload, Save, FileText, ChevronDown, ChevronUp, Copy } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye } from "lucide-react";
 
-const TIPOLOGIE = ["SERIE NORMALE", "PIRAMIDALE", "SUPER SERIE", "SUPER SET", "REST.P", "PEAK CONTRACTION", "STRIPPING"];
-const newExercise = () => ({ name: "", muscle_group: "", sets: 3, reps: "10", weight: "", rest_sec: 90, notes: "", gif_url: "", tipologia: "", video_url: "" });
-const newDay = (i) => ({ name: `Giorno ${i}`, exercises: [newExercise()] });
+const TABS = [
+  { key: "workouts", label: "Schede Allenamento", icon: Dumbbell },
+  { key: "nutrition", label: "Alimentazione", icon: Utensils },
+  { key: "photos", label: "Foto Prima/Dopo", icon: ImageIcon },
+  { key: "progress", label: "Progressi & BIA", icon: Activity },
+];
+
+function FileList({ items, kind, onDelete, viewToken }) {
+  if (!items.length) return <div className="text-zinc-500 text-sm py-4 text-center">Nessun file caricato ancora.</div>;
+  return (
+    <ul className="space-y-2">
+      {items.map((f, i) => (
+        <li key={f.id} className="flex items-center gap-3 p-3 bg-[#0A0A0D] border border-[#262633] rounded-lg" data-testid={`${kind}-item-${i}`}>
+          <FileText className="text-yellow-400 shrink-0" size={18} />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm text-white truncate">{f.title || f.filename}</div>
+            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono-num">
+              {new Date(f.uploaded_at).toLocaleDateString("it-IT")} · {(f.size / 1024).toFixed(0)} KB
+              {i === 0 && <span className="ml-2 text-yellow-400">· ATTUALE</span>}
+            </div>
+          </div>
+          <a href={`${API}/files/${kind}/${f.id}`} target="_blank" rel="noreferrer"
+             className="p-2 text-zinc-300 hover:text-yellow-400" title="Visualizza"
+             onClick={(e) => { e.preventDefault(); fetch(`${API}/files/${kind}/${f.id}`, { credentials: "include", headers: viewToken ? { Authorization: `Bearer ${viewToken}` } : {} }).then(r => r.blob()).then(b => window.open(URL.createObjectURL(b))); }}>
+            <Eye size={16} />
+          </a>
+          <button onClick={() => onDelete(f.id)} className="p-2 text-zinc-400 hover:text-red-400" title="Elimina" data-testid={`${kind}-del-${i}`}>
+            <Trash2 size={16} />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PdfUploadSection({ clientId, kind, label }) {
+  const [items, setItems] = useState([]);
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const t = getToken();
+
+  const load = async () => {
+    const r = await api.get(kind === "workouts" ? `/admin/clients/${clientId}/workouts` : `/admin/clients/${clientId}/nutrition/list`);
+    setItems(r.data);
+  };
+  useEffect(() => { load(); }, [clientId]);
+
+  const upload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("title", title || "");
+    try {
+      await api.post(kind === "workouts" ? `/admin/clients/${clientId}/workouts` : `/admin/clients/${clientId}/nutrition`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success(`${label} caricata`);
+      setTitle("");
+      load();
+    } catch (e) { toast.error(formatErr(e)); }
+    setBusy(false);
+    e.target.value = "";
+  };
+
+  const del = async (id) => {
+    if (!window.confirm("Eliminare questo file? Rimarrà l'ultimo caricato come attuale.")) return;
+    try {
+      await api.delete(kind === "workouts" ? `/admin/workouts/${id}` : `/admin/nutrition/${id}`);
+      toast.success("File eliminato"); load();
+    } catch (e) { toast.error(formatErr(e)); }
+  };
+
+  return (
+    <div className="lau-card p-5 lau-in">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <div>
+          <div className="font-display font-bold text-lg uppercase text-white">{label}</div>
+          <div className="text-xs text-zinc-400">Le versioni precedenti restano nello storico.</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input placeholder="Titolo (opz. es. Scheda A)" value={title} onChange={(e) => setTitle(e.target.value)}
+                 data-testid={`${kind}-title`}
+                 className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white w-56" />
+          <label className={`lau-gold-btn px-4 py-2 rounded text-sm cursor-pointer flex items-center gap-2 ${busy ? "opacity-50 pointer-events-none" : ""}`} data-testid={`${kind}-upload-btn`}>
+            <Upload size={16} /> {busy ? "..." : "Carica PDF"}
+            <input type="file" accept="application/pdf" onChange={upload} className="hidden" data-testid={`${kind}-upload-input`} />
+          </label>
+        </div>
+      </div>
+      <FileList items={items} kind={kind} onDelete={del} viewToken={t} />
+    </div>
+  );
+}
+
+function PhotosSection({ clientId }) {
+  const [items, setItems] = useState([]);
+  const [tag, setTag] = useState("prima");
+  const [date, setDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [blobs, setBlobs] = useState({});
+  const t = getToken();
+
+  const load = async () => {
+    const r = await api.get(`/admin/clients/${clientId}/photos`); setItems(r.data);
+  };
+  useEffect(() => { load(); }, [clientId]);
+
+  useEffect(() => {
+    items.forEach((p) => {
+      if (blobs[p.id]) return;
+      fetch(`${API}/files/photos/${p.id}`, { credentials: "include", headers: t ? { Authorization: `Bearer ${t}` } : {} })
+        .then((r) => r.blob())
+        .then((b) => setBlobs((prev) => ({ ...prev, [p.id]: URL.createObjectURL(b) })))
+        .catch(() => {});
+    });
+  }, [items]);
+
+  const upload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    const fd = new FormData();
+    fd.append("file", file); fd.append("tag", tag); fd.append("photo_date", date || ""); fd.append("notes", notes || "");
+    try {
+      await api.post(`/admin/clients/${clientId}/photos`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success("Foto caricata");
+      setNotes(""); load();
+    } catch (e) { toast.error(formatErr(e)); }
+    setBusy(false); e.target.value = "";
+  };
+
+  const del = async (id) => {
+    if (!window.confirm("Eliminare la foto?")) return;
+    try { await api.delete(`/admin/photos/${id}`); toast.success("Foto eliminata"); load(); }
+    catch (e) { toast.error(formatErr(e)); }
+  };
+
+  return (
+    <div className="lau-card p-5 lau-in">
+      <div className="grid gap-2 sm:grid-cols-[auto_auto_1fr_auto] items-center mb-4">
+        <select value={tag} onChange={(e) => setTag(e.target.value)} data-testid="photo-tag"
+                className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white">
+          <option value="prima">PRIMA</option>
+          <option value="dopo">DOPO</option>
+          <option value="check">CHECK</option>
+        </select>
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} data-testid="photo-date"
+               className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
+        <input placeholder="Note (opz.)" value={notes} onChange={(e) => setNotes(e.target.value)}
+               className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
+        <label className={`lau-gold-btn px-4 py-2 rounded text-sm cursor-pointer flex items-center gap-2 ${busy ? "opacity-50 pointer-events-none" : ""}`} data-testid="photo-upload-btn">
+          <Upload size={16} /> {busy ? "..." : "Foto"}
+          <input type="file" accept="image/*" onChange={upload} className="hidden" data-testid="photo-upload-input" />
+        </label>
+      </div>
+      {items.length === 0 ? (
+        <div className="text-zinc-500 text-sm py-4 text-center">Nessuna foto ancora caricata.</div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {items.map((p) => (
+            <div key={p.id} className="relative group border border-[#262633] rounded-lg overflow-hidden bg-[#0A0A0D]" data-testid={`photo-${p.id}`}>
+              {blobs[p.id] ? (
+                <img src={blobs[p.id]} alt={p.tag} className="w-full h-40 object-cover" />
+              ) : (
+                <div className="w-full h-40 bg-zinc-800 animate-pulse" />
+              )}
+              <div className="absolute top-1 left-1 text-[9px] uppercase font-mono-num px-2 py-0.5 rounded bg-yellow-400 text-black font-bold">
+                {p.tag}
+              </div>
+              <button onClick={() => del(p.id)} className="absolute top-1 right-1 p-1 rounded bg-black/70 text-red-400 opacity-0 group-hover:opacity-100 transition">
+                <Trash2 size={12} />
+              </button>
+              <div className="text-[10px] p-2 text-zinc-400 font-mono-num">
+                {p.photo_date || new Date(p.uploaded_at).toLocaleDateString("it-IT")}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProgressSection({ clientId }) {
+  const [items, setItems] = useState([]);
+  const [f, setF] = useState({ date: "", weight_kg: "", bia_fat: "", bia_muscle: "", bia_water: "", bia_bmi: "", notes: "" });
+  const load = async () => { const r = await api.get(`/admin/clients/${clientId}/progress`); setItems(r.data); };
+  useEffect(() => { load(); }, [clientId]);
+
+  const add = async (e) => {
+    e.preventDefault();
+    const body = { ...f };
+    ["weight_kg","bia_fat","bia_muscle","bia_water","bia_bmi"].forEach((k) => {
+      body[k] = body[k] === "" ? null : Number(body[k]);
+    });
+    try {
+      await api.post(`/admin/clients/${clientId}/progress`, body);
+      toast.success("Progresso salvato");
+      setF({ date: "", weight_kg: "", bia_fat: "", bia_muscle: "", bia_water: "", bia_bmi: "", notes: "" });
+      load();
+    } catch (e) { toast.error(formatErr(e)); }
+  };
+
+  const del = async (id) => {
+    if (!window.confirm("Eliminare questa voce?")) return;
+    try { await api.delete(`/admin/progress/${id}`); load(); } catch (e) { toast.error(formatErr(e)); }
+  };
+
+  const Field = ({ k, ph, w = "" }) => (
+    <input placeholder={ph} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })}
+           data-testid={`progress-${k}`}
+           className={`bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white ${w}`} />
+  );
+
+  return (
+    <div className="space-y-4">
+      <form onSubmit={add} className="lau-card p-5 space-y-3 lau-in">
+        <div className="font-display font-bold uppercase text-white">Nuova rilevazione</div>
+        <div className="grid gap-2 sm:grid-cols-3 md:grid-cols-6">
+          <input type="date" required value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })}
+                 data-testid="progress-date"
+                 className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
+          <Field k="weight_kg" ph="Peso kg" />
+          <Field k="bia_fat" ph="Grasso %" />
+          <Field k="bia_muscle" ph="Muscolo %" />
+          <Field k="bia_water" ph="Acqua %" />
+          <Field k="bia_bmi" ph="BMI" />
+        </div>
+        <input placeholder="Note (BIA, misurazioni, sensazioni...)" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })}
+               data-testid="progress-notes"
+               className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
+        <button type="submit" data-testid="progress-submit" className="lau-gold-btn px-4 py-2 rounded text-sm flex items-center gap-2">
+          <Plus size={16} /> Aggiungi
+        </button>
+      </form>
+
+      <div className="lau-card p-4 overflow-x-auto">
+        {items.length === 0 ? (
+          <div className="text-zinc-500 text-sm py-4 text-center">Nessuna rilevazione ancora.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-widest text-yellow-400 font-mono-num border-b border-[#262633]">
+                <th className="text-left py-2 px-2">Data</th>
+                <th className="text-right px-2">Peso</th>
+                <th className="text-right px-2">Grasso</th>
+                <th className="text-right px-2">Muscolo</th>
+                <th className="text-right px-2">Acqua</th>
+                <th className="text-right px-2">BMI</th>
+                <th className="text-left px-2">Note</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((p) => (
+                <tr key={p.id} className="border-b border-[#262633]/50 text-zinc-200" data-testid={`prog-row-${p.id}`}>
+                  <td className="py-2 px-2 font-mono-num">{p.date}</td>
+                  <td className="text-right px-2 font-mono-num">{p.weight_kg ?? "-"}</td>
+                  <td className="text-right px-2 font-mono-num">{p.bia_fat ?? "-"}</td>
+                  <td className="text-right px-2 font-mono-num">{p.bia_muscle ?? "-"}</td>
+                  <td className="text-right px-2 font-mono-num">{p.bia_water ?? "-"}</td>
+                  <td className="text-right px-2 font-mono-num">{p.bia_bmi ?? "-"}</td>
+                  <td className="px-2 text-zinc-400 text-xs">{p.notes}</td>
+                  <td><button onClick={() => del(p.id)} className="text-zinc-400 hover:text-red-400 px-2"><Trash2 size={14} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function ClientDetail() {
   const { id } = useParams();
   const nav = useNavigate();
   const [client, setClient] = useState(null);
-  const [plan, setPlan] = useState({ title: "Scheda Allenamento", days: [] });
-  const [library, setLibrary] = useState([]);
-  const [nutrition, setNutrition] = useState(null);
-  const [openDay, setOpenDay] = useState(0);
-  const [saving, setSaving] = useState(false);
+  const [tab, setTab] = useState("workouts");
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [c, p, l, n] = await Promise.all([
-          api.get(`/admin/clients/${id}`),
-          api.get(`/admin/clients/${id}/plan`),
-          api.get(`/exercises/library`),
-          api.get(`/admin/clients/${id}/nutrition/info`),
-        ]);
-        setClient(c.data);
-        setPlan(p.data.days ? p.data : { title: "Scheda Allenamento", days: [] });
-        setLibrary(l.data);
-        setNutrition(n.data);
-      } catch (e) { toast.error(formatErr(e)); }
-    })();
-  }, [id]);
-
-  const updateDay = (di, patch) => setPlan({ ...plan, days: plan.days.map((d, i) => i === di ? { ...d, ...patch } : d) });
-  const updateEx = (di, ei, patch) => updateDay(di, { exercises: plan.days[di].exercises.map((e, i) => i === ei ? { ...e, ...patch } : e) });
-  const addDay = () => { const d = [...plan.days, newDay(plan.days.length + 1)]; setPlan({ ...plan, days: d }); setOpenDay(d.length - 1); };
-  const delDay = (di) => setPlan({ ...plan, days: plan.days.filter((_, i) => i !== di) });
-  const addEx = (di, template = null) => updateDay(di, { exercises: [...plan.days[di].exercises, template ? { ...newExercise(), ...template } : newExercise()] });
-  const delEx = (di, ei) => updateDay(di, { exercises: plan.days[di].exercises.filter((_, i) => i !== ei) });
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      await api.put(`/admin/clients/${id}/plan`, plan);
-      toast.success("Scheda salvata");
-    } catch (e) { toast.error(formatErr(e)); }
-    setSaving(false);
-  };
-
-  const uploadPdf = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const fd = new FormData(); fd.append("file", file);
-    try {
-      await api.post(`/admin/clients/${id}/nutrition`, fd, { headers: { "Content-Type": "multipart/form-data" } });
-      toast.success("Piano alimentare caricato");
-      const n = await api.get(`/admin/clients/${id}/nutrition/info`); setNutrition(n.data);
-    } catch (e) { toast.error(formatErr(e)); }
-    e.target.value = "";
-  };
+  useEffect(() => { api.get(`/admin/clients/${id}`).then((r) => setClient(r.data)).catch((e) => toast.error(formatErr(e))); }, [id]);
 
   if (!client) return <AppShell><div className="text-zinc-400 text-center py-10">Caricamento...</div></AppShell>;
 
@@ -71,145 +295,30 @@ export default function ClientDetail() {
       <button onClick={() => nav("/admin")} className="flex items-center gap-2 text-sm text-zinc-400 hover:text-yellow-400 mb-4" data-testid="back-to-admin">
         <ArrowLeft size={16} /> Torna agli atleti
       </button>
-
-      <div className="flex items-end justify-between flex-wrap gap-3 mb-6">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.35em] text-yellow-400 font-mono-num">Atleta</div>
-          <h1 className="font-display font-black text-3xl sm:text-4xl uppercase text-white">{client.name}</h1>
-          <div className="text-sm text-zinc-400">{client.email}</div>
-        </div>
+      <div className="mb-6">
+        <div className="text-[10px] uppercase tracking-[0.35em] text-yellow-400 font-mono-num">Atleta</div>
+        <h1 className="font-display font-black text-3xl sm:text-4xl uppercase text-white">{client.name}</h1>
+        <div className="text-sm text-zinc-400">{client.email}</div>
       </div>
 
-      {/* Nutrition upload */}
-      <section className="lau-card p-5 mb-6 lau-in">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <FileText className="text-yellow-400" />
-            <div>
-              <div className="font-display font-bold text-lg uppercase text-white">Piano Alimentare (PDF)</div>
-              <div className="text-xs text-zinc-400">{nutrition ? `Caricato: ${nutrition.filename}` : "Nessun piano caricato"}</div>
-            </div>
-          </div>
-          <label className="lau-gold-btn px-4 py-2 rounded text-sm cursor-pointer flex items-center gap-2" data-testid="upload-nutrition-btn">
-            <Upload size={16} /> {nutrition ? "Sostituisci PDF" : "Carica PDF"}
-            <input type="file" accept="application/pdf" onChange={uploadPdf} className="hidden" data-testid="upload-nutrition-input" />
-          </label>
-        </div>
-      </section>
-
-      {/* Plan editor */}
-      <section className="mb-4 flex items-center justify-between flex-wrap gap-3">
-        <input
-          value={plan.title || ""} onChange={(e) => setPlan({ ...plan, title: e.target.value })}
-          data-testid="plan-title"
-          className="bg-transparent font-display font-black text-2xl uppercase text-white border-b border-[#262633] focus:border-yellow-500 outline-none px-1"
-        />
-        <div className="flex gap-2">
-          <button onClick={addDay} data-testid="add-day-btn" className="px-3 py-2 rounded border border-[#262633] hover:border-yellow-500/60 text-sm text-white flex items-center gap-1">
-            <Plus size={14} /> Giorno
-          </button>
-          <button onClick={save} disabled={saving} data-testid="save-plan-btn" className="lau-gold-btn px-4 py-2 rounded text-sm flex items-center gap-2">
-            <Save size={16} /> {saving ? "Salvo..." : "Salva Scheda"}
-          </button>
-        </div>
-      </section>
-
-      <div className="space-y-3">
-        {plan.days.map((d, di) => (
-          <div key={di} className="lau-card p-4 lau-in" data-testid={`day-${di}`}>
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="flex items-center gap-2 flex-1">
-                <button onClick={() => setOpenDay(openDay === di ? -1 : di)} className="text-yellow-400">
-                  {openDay === di ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                </button>
-                <input
-                  value={d.name} onChange={(e) => updateDay(di, { name: e.target.value })}
-                  className="bg-transparent font-display font-bold uppercase text-lg text-white outline-none border-b border-transparent focus:border-yellow-500 flex-1"
-                  data-testid={`day-name-${di}`}
-                />
-                <span className="text-xs text-zinc-500 font-mono-num">{d.exercises.length} es.</span>
-              </div>
-              <button onClick={() => delDay(di)} className="p-2 text-zinc-400 hover:text-red-400" data-testid={`del-day-${di}`}>
-                <Trash2 size={14} />
-              </button>
-            </div>
-
-            {openDay === di && (
-              <div className="space-y-3 pt-2 border-t border-[#262633]">
-                {d.exercises.map((ex, ei) => (
-                  <div key={ei} className="bg-[#0A0A0D] border border-[#262633] rounded-lg p-3" data-testid={`plan-ex-${di}-${ei}`}>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <input placeholder="Nome esercizio" value={ex.name}
-                        onChange={(e) => updateEx(di, ei, { name: e.target.value })}
-                        data-testid={`plan-ex-name-${di}-${ei}`}
-                        className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
-                      <input placeholder="Gruppo muscolare" value={ex.muscle_group}
-                        onChange={(e) => updateEx(di, ei, { muscle_group: e.target.value })}
-                        className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
-                    </div>
-                    <div className="grid grid-cols-4 gap-2 mt-2">
-                      <input type="number" placeholder="Serie" value={ex.sets}
-                        onChange={(e) => updateEx(di, ei, { sets: Number(e.target.value) || 0 })}
-                        className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-2 py-2 text-sm text-white" />
-                      <input placeholder="Reps" value={ex.reps}
-                        onChange={(e) => updateEx(di, ei, { reps: e.target.value })}
-                        className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-2 py-2 text-sm text-white" />
-                      <input placeholder="Peso" value={ex.weight}
-                        onChange={(e) => updateEx(di, ei, { weight: e.target.value })}
-                        className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-2 py-2 text-sm text-white" />
-                      <input type="number" placeholder="Rest sec" value={ex.rest_sec}
-                        onChange={(e) => updateEx(di, ei, { rest_sec: Number(e.target.value) || 0 })}
-                        className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-2 py-2 text-sm text-white" />
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2 mt-2">
-                      <select value={ex.tipologia || ""}
-                        onChange={(e) => updateEx(di, ei, { tipologia: e.target.value })}
-                        data-testid={`plan-ex-tipologia-${di}-${ei}`}
-                        className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-2 py-2 text-sm text-white">
-                        <option value="">Tipologia (opzionale)</option>
-                        {TIPOLOGIE.map((t) => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                      <input placeholder="Link video (opzionale)" value={ex.video_url || ""}
-                        onChange={(e) => updateEx(di, ei, { video_url: e.target.value })}
-                        className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
-                    </div>
-                    <input placeholder="Note del PT (tecnica, tempo, ecc.)" value={ex.notes || ""}
-                      onChange={(e) => updateEx(di, ei, { notes: e.target.value })}
-                      className="mt-2 w-full bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
-                    <div className="flex justify-end mt-2">
-                      <button onClick={() => delEx(di, ei)} className="text-xs text-zinc-400 hover:text-red-400 flex items-center gap-1" data-testid={`del-ex-${di}-${ei}`}>
-                        <Trash2 size={12} /> Rimuovi
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <button onClick={() => addEx(di)} className="px-3 py-2 rounded border border-yellow-500/40 text-yellow-400 text-xs uppercase tracking-wider font-bold flex items-center gap-1" data-testid={`add-ex-${di}`}>
-                    <Plus size={14} /> Esercizio vuoto
-                  </button>
-                  <details className="relative">
-                    <summary className="list-none cursor-pointer px-3 py-2 rounded border border-[#262633] hover:border-yellow-500/40 text-xs uppercase tracking-wider text-zinc-300 flex items-center gap-1">
-                      <Copy size={12} /> Dalla libreria
-                    </summary>
-                    <div className="absolute z-10 mt-1 bg-[#121218] border border-[#262633] rounded-lg p-2 max-h-72 overflow-auto w-72">
-                      {library.map((lib, i) => (
-                        <button key={i} onClick={() => addEx(di, lib)} className="w-full text-left text-xs text-zinc-200 hover:bg-yellow-500/10 px-2 py-1 rounded" data-testid={`lib-${di}-${i}`}>
-                          <span className="text-yellow-400 font-mono-num text-[10px] uppercase mr-2">{lib.muscle_group}</span>{lib.name}
-                        </button>
-                      ))}
-                    </div>
-                  </details>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-        {plan.days.length === 0 && (
-          <div className="lau-card p-8 text-center text-zinc-400">
-            Nessun giorno. Aggiungi il primo giorno di allenamento.
-          </div>
-        )}
+      <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar">
+        {TABS.map((t) => {
+          const Icon = t.icon; const active = tab === t.key;
+          return (
+            <button key={t.key} onClick={() => setTab(t.key)} data-testid={`admin-tab-${t.key}`}
+                    className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg font-display font-bold uppercase tracking-wider text-xs sm:text-sm transition border ${
+                      active ? "bg-yellow-400 text-black border-yellow-400" : "border-[#262633] text-zinc-300 hover:border-yellow-500/50"
+                    }`}>
+              <Icon size={14} /> {t.label}
+            </button>
+          );
+        })}
       </div>
+
+      {tab === "workouts" && <PdfUploadSection clientId={id} kind="workouts" label="Scheda Allenamento (PDF)" />}
+      {tab === "nutrition" && <PdfUploadSection clientId={id} kind="nutrition" label="Piano Alimentare (PDF)" />}
+      {tab === "photos" && <PhotosSection clientId={id} />}
+      {tab === "progress" && <ProgressSection clientId={id} />}
     </AppShell>
   );
 }

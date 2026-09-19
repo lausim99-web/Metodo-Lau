@@ -6,6 +6,7 @@ import Login from "./pages/Login";
 import ClientDashboard from "./pages/ClientDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import ClientDetail from "./pages/ClientDetail";
+import Profile from "./pages/Profile";
 
 function LoadingScreen() {
   return (
@@ -40,6 +41,7 @@ function App() {
           <Route path="/" element={<RootRedirect />} />
           <Route path="/admin" element={<Protected role="admin"><AdminDashboard /></Protected>} />
           <Route path="/admin/clients/:id" element={<Protected role="admin"><ClientDetail /></Protected>} />
+          <Route path="/profile" element={<Protected><Profile /></Protected>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

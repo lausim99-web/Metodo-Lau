@@ -99,7 +99,7 @@ export default function AdminDashboard() {
                   <div className="text-xs text-zinc-400 truncate">{c.email}</div>
                 </div>
               </div>
-              <div className="flex gap-2 mb-4 flex-wrap">
+        <div className="flex gap-2 mb-4 flex-wrap">
                 <span className={`text-[10px] uppercase tracking-wider font-mono-num px-2 py-1 rounded ${c.has_plan ? "bg-yellow-400/15 text-yellow-400" : "bg-zinc-800 text-zinc-500"}`}>
                   {c.has_plan ? "✓ Scheda" : "○ Scheda"}
                 </span>

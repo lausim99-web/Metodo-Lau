@@ -14,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Any
 from bson import ObjectId
 
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, UploadFile, File, Form, Query
 from fastapi.responses import Response as FastResponse
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -140,6 +140,10 @@ class CreateClientIn(BaseModel):
 class ResetPwIn(BaseModel):
     password: str
 
+class ChangePwIn(BaseModel):
+    current_password: str
+    new_password: str
+
 class ExerciseIn(BaseModel):
     name: str
     muscle_group: Optional[str] = ""
@@ -159,6 +163,8 @@ class WorkoutDayIn(BaseModel):
 class WorkoutPlanIn(BaseModel):
     title: str = "Scheda Allenamento"
     days: List[WorkoutDayIn] = []
+    expires_at: Optional[str] = None  # ISO date string
+    duration_weeks: Optional[int] = 8
 
 class SetLogIn(BaseModel):
     reps: str = ""
@@ -170,6 +176,15 @@ class WorkoutLogIn(BaseModel):
     exercise_index: int
     exercise_name: str
     sets: List[SetLogIn] = []
+    notes: Optional[str] = ""
+
+class ProgressIn(BaseModel):
+    date: Optional[str] = None  # ISO date
+    weight_kg: Optional[float] = None
+    bia_fat: Optional[float] = None
+    bia_muscle: Optional[float] = None
+    bia_water: Optional[float] = None
+    bia_bmi: Optional[float] = None
     notes: Optional[str] = ""
 
 # ---------- Cookie helper ----------
@@ -196,6 +211,17 @@ async def logout(response: Response):
 @api.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     return user
+
+@api.post("/me/password")
+async def change_my_password(body: ChangePwIn, user: dict = Depends(get_current_user)):
+    if len(body.new_password) < 6:
+        raise HTTPException(400, "La nuova password deve avere almeno 6 caratteri")
+    doc = await db.users.find_one({"_id": ObjectId(user["id"])})
+    if not doc or not verify_password(body.current_password, doc["password_hash"]):
+        raise HTTPException(400, "Password attuale non corretta")
+    await db.users.update_one({"_id": ObjectId(user["id"])},
+                              {"$set": {"password_hash": hash_password(body.new_password)}})
+    return {"ok": True}
 
 # ---------- Admin: clients ----------
 @api.post("/admin/clients")
@@ -300,7 +326,7 @@ async def client_logs(client_id: str, _: dict = Depends(require_admin)):
 
 # ---------- Nutrition PDF ----------
 @api.post("/admin/clients/{client_id}/nutrition")
-async def upload_nutrition(client_id: str, file: UploadFile = File(...), _: dict = Depends(require_admin)):
+async def upload_nutrition(client_id: str, title: str = Form(""), file: UploadFile = File(...), _: dict = Depends(require_admin)):
     u = await db.users.find_one({"_id": ObjectId(client_id)})
     if not u:
         raise HTTPException(404, "Cliente non trovato")
@@ -311,44 +337,219 @@ async def upload_nutrition(client_id: str, file: UploadFile = File(...), _: dict
         raise HTTPException(400, "File troppo grande (max 15MB)")
     path = f"{APP_NAME}/nutrition/{client_id}/{uuid.uuid4()}.pdf"
     result = put_object(path, data, "application/pdf")
-    doc = {"user_id": client_id, "storage_path": result["path"],
-           "filename": file.filename, "size": result.get("size", len(data)),
+    doc = {"id": str(uuid.uuid4()), "user_id": client_id, "storage_path": result["path"],
+           "filename": file.filename, "title": title or file.filename,
+           "size": result.get("size", len(data)),
            "uploaded_at": datetime.now(timezone.utc).isoformat()}
-    await db.nutrition.update_one({"user_id": client_id}, {"$set": doc}, upsert=True)
-    return {"ok": True, "filename": file.filename}
+    await db.nutrition.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
 
+async def _list_files(collection, user_id: str):
+    out = []
+    async for f in collection.find({"user_id": user_id}).sort("uploaded_at", -1):
+        f.pop("_id", None)
+        out.append(f)
+    return out
+
+@api.get("/admin/clients/{client_id}/nutrition/list")
+async def admin_nutrition_list(client_id: str, _: dict = Depends(require_admin)):
+    return await _list_files(db.nutrition, client_id)
+
+@api.get("/me/nutrition/list")
+async def my_nutrition_list(user: dict = Depends(get_current_user)):
+    return await _list_files(db.nutrition, user["id"])
+
+async def _serve_file(collection, file_id: str, requester_id: str, is_admin: bool):
+    doc = await collection.find_one({"id": file_id})
+    if not doc:
+        raise HTTPException(404, "File non trovato")
+    if not is_admin and doc["user_id"] != requester_id:
+        raise HTTPException(403, "Non autorizzato")
+    data, ct = get_object(doc["storage_path"])
+    return FastResponse(content=data, media_type=doc.get("content_type") or "application/pdf",
+                        headers={"Content-Disposition": f'inline; filename="{doc.get("filename","file.pdf")}"'})
+
+@api.get("/files/nutrition/{file_id}")
+async def download_nutrition(file_id: str, user: dict = Depends(get_current_user)):
+    return await _serve_file(db.nutrition, file_id, user["id"], user["role"] == "admin")
+
+@api.delete("/admin/nutrition/{file_id}")
+async def delete_nutrition(file_id: str, _: dict = Depends(require_admin)):
+    r = await db.nutrition.delete_one({"id": file_id})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "File non trovato")
+    return {"ok": True}
+
+# Legacy singular endpoints (backwards compat)
 @api.get("/admin/clients/{client_id}/nutrition/info")
 async def admin_nutrition_info(client_id: str, _: dict = Depends(require_admin)):
-    n = await db.nutrition.find_one({"user_id": client_id})
-    if not n:
-        return None
-    n.pop("_id", None)
-    return n
+    n = await db.nutrition.find_one({"user_id": client_id}, sort=[("uploaded_at", -1)])
+    if not n: return None
+    n.pop("_id", None); return n
 
 @api.get("/me/nutrition/info")
 async def my_nutrition_info(user: dict = Depends(get_current_user)):
-    n = await db.nutrition.find_one({"user_id": user["id"]})
-    if not n:
-        return None
-    n.pop("_id", None)
-    return n
+    n = await db.nutrition.find_one({"user_id": user["id"]}, sort=[("uploaded_at", -1)])
+    if not n: return None
+    n.pop("_id", None); return n
 
 @api.get("/me/nutrition/file")
 async def my_nutrition_file(user: dict = Depends(get_current_user)):
-    n = await db.nutrition.find_one({"user_id": user["id"]})
-    if not n:
-        raise HTTPException(404, "Nessun piano alimentare disponibile")
+    n = await db.nutrition.find_one({"user_id": user["id"]}, sort=[("uploaded_at", -1)])
+    if not n: raise HTTPException(404, "Nessun piano alimentare disponibile")
     data, ct = get_object(n["storage_path"])
     return FastResponse(content=data, media_type="application/pdf",
                         headers={"Content-Disposition": f'inline; filename="{n.get("filename","piano.pdf")}"'})
 
 @api.get("/admin/clients/{client_id}/nutrition/file")
 async def admin_nutrition_file(client_id: str, _: dict = Depends(require_admin)):
-    n = await db.nutrition.find_one({"user_id": client_id})
-    if not n:
-        raise HTTPException(404, "Nessun piano alimentare")
+    n = await db.nutrition.find_one({"user_id": client_id}, sort=[("uploaded_at", -1)])
+    if not n: raise HTTPException(404, "Nessun piano alimentare")
     data, ct = get_object(n["storage_path"])
     return FastResponse(content=data, media_type="application/pdf")
+
+# ---------- Workout PDFs (with history) ----------
+@api.post("/admin/clients/{client_id}/workouts")
+async def upload_workout(client_id: str, title: str = Form(""), file: UploadFile = File(...), _: dict = Depends(require_admin)):
+    if not (file.content_type or "").startswith("application/pdf") and not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(400, "Solo file PDF sono ammessi")
+    data = await file.read()
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(400, "File troppo grande (max 15MB)")
+    path = f"{APP_NAME}/workouts/{client_id}/{uuid.uuid4()}.pdf"
+    result = put_object(path, data, "application/pdf")
+    doc = {"id": str(uuid.uuid4()), "user_id": client_id, "storage_path": result["path"],
+           "filename": file.filename, "title": title or file.filename,
+           "size": result.get("size", len(data)),
+           "uploaded_at": datetime.now(timezone.utc).isoformat()}
+    await db.workouts.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api.get("/admin/clients/{client_id}/workouts")
+async def admin_workouts_list(client_id: str, _: dict = Depends(require_admin)):
+    return await _list_files(db.workouts, client_id)
+
+@api.get("/me/workouts")
+async def my_workouts(user: dict = Depends(get_current_user)):
+    return await _list_files(db.workouts, user["id"])
+
+@api.get("/files/workouts/{file_id}")
+async def download_workout(file_id: str, user: dict = Depends(get_current_user)):
+    return await _serve_file(db.workouts, file_id, user["id"], user["role"] == "admin")
+
+@api.delete("/admin/workouts/{file_id}")
+async def delete_workout(file_id: str, _: dict = Depends(require_admin)):
+    r = await db.workouts.delete_one({"id": file_id})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "File non trovato")
+    return {"ok": True}
+
+# ---------- Photos (prima/dopo) ----------
+ALLOWED_IMG = {"image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
+
+@api.post("/admin/clients/{client_id}/photos")
+async def upload_photo(client_id: str, tag: str = Form("prima"), photo_date: str = Form(""),
+                       notes: str = Form(""), file: UploadFile = File(...), _: dict = Depends(require_admin)):
+    ct = file.content_type or ""
+    if ct not in ALLOWED_IMG and not any(file.filename.lower().endswith(e) for e in [".jpg",".jpeg",".png",".webp",".heic",".heif"]):
+        raise HTTPException(400, "Formato immagine non supportato")
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Immagine troppo grande (max 10MB)")
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "jpg"
+    path = f"{APP_NAME}/photos/{client_id}/{uuid.uuid4()}.{ext}"
+    result = put_object(path, data, ct or "image/jpeg")
+    doc = {"id": str(uuid.uuid4()), "user_id": client_id, "storage_path": result["path"],
+           "filename": file.filename, "tag": tag, "photo_date": photo_date or None,
+           "notes": notes, "content_type": ct or "image/jpeg",
+           "uploaded_at": datetime.now(timezone.utc).isoformat()}
+    await db.photos.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+async def _list_photos(user_id: str):
+    out = []
+    async for p in db.photos.find({"user_id": user_id}).sort([("photo_date", -1), ("uploaded_at", -1)]):
+        p.pop("_id", None); out.append(p)
+    return out
+
+@api.get("/admin/clients/{client_id}/photos")
+async def admin_photos(client_id: str, _: dict = Depends(require_admin)):
+    return await _list_photos(client_id)
+
+@api.get("/me/photos")
+async def my_photos(user: dict = Depends(get_current_user)):
+    return await _list_photos(user["id"])
+
+@api.get("/files/photos/{file_id}")
+async def download_photo(file_id: str, authorization: Optional[str] = None,
+                         auth: Optional[str] = Query(None), request: Request = None):
+    # accept auth via header, cookie or query param (needed for <img> tags)
+    token = request.cookies.get("access_token") if request else None
+    if not token:
+        h = (request.headers.get("Authorization") if request else None) or ""
+        if h.startswith("Bearer "):
+            token = h[7:]
+    if not token and auth:
+        token = auth
+    if not token:
+        raise HTTPException(401, "Not authenticated")
+    try:
+        payload = pyjwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+    except Exception:
+        raise HTTPException(401, "Invalid token")
+    user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+    if not user:
+        raise HTTPException(401, "User not found")
+    doc = await db.photos.find_one({"id": file_id})
+    if not doc:
+        raise HTTPException(404, "Foto non trovata")
+    if user.get("role") != "admin" and doc["user_id"] != str(user["_id"]):
+        raise HTTPException(403, "Non autorizzato")
+    data, ct = get_object(doc["storage_path"])
+    return FastResponse(content=data, media_type=doc.get("content_type") or ct)
+
+@api.delete("/admin/photos/{file_id}")
+async def delete_photo(file_id: str, _: dict = Depends(require_admin)):
+    r = await db.photos.delete_one({"id": file_id})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Foto non trovata")
+    return {"ok": True}
+
+# ---------- Progress (peso + BIA) ----------
+@api.post("/admin/clients/{client_id}/progress")
+async def add_progress(client_id: str, body: ProgressIn, _: dict = Depends(require_admin)):
+    doc = body.model_dump()
+    doc["id"] = str(uuid.uuid4())
+    doc["user_id"] = client_id
+    doc["date"] = doc.get("date") or datetime.now(timezone.utc).date().isoformat()
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.progress.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+async def _list_progress(user_id: str):
+    out = []
+    async for p in db.progress.find({"user_id": user_id}).sort("date", -1):
+        p.pop("_id", None); out.append(p)
+    return out
+
+@api.get("/admin/clients/{client_id}/progress")
+async def admin_progress_list(client_id: str, _: dict = Depends(require_admin)):
+    return await _list_progress(client_id)
+
+@api.get("/me/progress")
+async def my_progress(user: dict = Depends(get_current_user)):
+    return await _list_progress(user["id"])
+
+@api.delete("/admin/progress/{entry_id}")
+async def delete_progress(entry_id: str, _: dict = Depends(require_admin)):
+    r = await db.progress.delete_one({"id": entry_id})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Voce non trovata")
+    return {"ok": True}
 
 # ---------- Exercise Library ----------
 DEFAULT_EXERCISES = [
@@ -398,10 +599,21 @@ app.add_middleware(
 # ---------- Startup ----------
 @app.on_event("startup")
 async def startup():
+    # drop legacy unique index on nutrition.user_id if present (from earlier versions)
+    try:
+        idxs = await db.nutrition.index_information()
+        for name, info in idxs.items():
+            if name != "_id_" and info.get("unique"):
+                await db.nutrition.drop_index(name)
+    except Exception:
+        pass
     await db.users.create_index("email", unique=True)
     await db.plans.create_index("user_id", unique=True)
-    await db.nutrition.create_index("user_id", unique=True)
     await db.logs.create_index([("user_id", 1), ("date", -1)])
+    await db.nutrition.create_index("user_id")
+    await db.workouts.create_index("user_id")
+    await db.photos.create_index("user_id")
+    await db.progress.create_index([("user_id", 1), ("date", -1)])
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
     if not existing:
         await db.users.insert_one({
