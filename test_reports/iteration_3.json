@@ -1,0 +1,29 @@
+{
+  "summary": "Regression check after N+1 fix (list_clients uses bulk $in on db.workouts + db.nutrition) and query limits (files=100, photos=100, progress=200). Backend: 5/5 pytest checks green. Frontend: admin /admin lists 7 clients; Mario Rossi card shows both ✓ Scheda and ✓ Piano badges (has_plan=true & has_nutrition=true), other clients render correct filled/outlined badges consistent with data. Mario login lands on client dashboard; all 5 tabs (Schede, Alimentazione, Foto, Progressi, Sessioni) render via data-testid tab-workouts / tab-nutrition / tab-photos / tab-progress / tab-sessions with no crashes. Sessions tab shows 2 seeded sessions + PT contacts card. Only 2 pre-existing non-blocking 401 console errors (same as iteration_1 note — early /auth/me before token propagation).",
+  "tested_scope": ["backend", "frontend", "regression"],
+  "passed": [
+    "GET /api/admin/clients (admin) -> 200, Mario has has_plan=true & has_nutrition=true",
+    "GET /api/me/workouts (Mario) -> 200, >=1 item (not truncated by .limit(100))",
+    "GET /api/me/nutrition/list (Mario) -> 200, >=1 item",
+    "GET /api/me/photos (Mario) -> 200, >=1 item",
+    "GET /api/me/progress (Mario) -> 200, >=1 item (not truncated by .limit(200))",
+    "Admin dashboard /admin renders Mario card with ✓ Scheda + ✓ Piano badges",
+    "Mario /login -> client dashboard; tab-workouts, tab-nutrition, tab-photos, tab-progress, tab-sessions all present & clickable",
+    "Sessioni tab renders 2 upcoming sessions + PT contact card"
+  ],
+  "failed": [],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_regression_iter3.py", "/app/test_reports/pytest/iter3_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is ~980 lines — consider splitting into routers (auth/admin/me/files) before it grows further",
+    "list_clients fetches full user docs via async cursor into a list then iterates twice; could use projection {email:1,name:1,created_at:1} to reduce payload",
+    "Two 401s on first client-dashboard render (pre-existing) suggest an API call fires before the auth token is attached; harmless but noisy — worth guarding with a token-ready effect"
+  ],
+  "updated_files": ["/app/backend/tests/test_regression_iter3.py"],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (all 5 tabs + admin badges)"},
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 3 regression PASS. Bulk $in queries in list_clients and limit(100/200) on file/photo/progress listings did NOT break Mario's seeded data or the admin badge rendering. Mario password remains Mario2026! (not changed this iteration)."
+}

@@ -27,6 +27,12 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - Logo mascotte con crop rounded-full (sfondo bianco eliminato via overflow-hidden + scale)
 - Testing: iterazione 1 e 2 al 100% pass backend + frontend
 
+## Deploy readiness (2026-02, health check #1 → #2)
+- Iterazione 1: FAIL — N+1 query su GET /api/admin/clients + 3 query senza limit
+- Fix: bulk $in queries (2 invece di 2N), has_plan ora legge db.workouts (PDF), limit(100/200) su listings
+- Iterazione 2: **PASS** — pronta per il deploy Kubernetes
+- Pending: deploy in produzione (~50 crediti/mese), dominio personalizzato opzionale
+
 ## Backlog (P1)
 - Cambio password lato atleta dopo primo login
 - Storico progressione peso per esercizio (grafico recharts)
