@@ -3,7 +3,7 @@ import AppShell from "../components/AppShell";
 import ContactCard from "../components/ContactCard";
 import { api, API, getToken, formatErr } from "../api";
 import { useAuth } from "../auth";
-import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye } from "lucide-react";
+import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
 const TABS = [
@@ -15,15 +15,22 @@ const TABS = [
 
 function PdfList({ endpoint, kind }) {
   const [items, setItems] = useState([]);
-  const [preview, setPreview] = useState(null);
   const t = getToken();
 
   useEffect(() => { api.get(endpoint).then((r) => setItems(r.data)).catch(() => setItems([])); }, [endpoint]);
 
   const open = async (f) => {
+    // scarica il PDF: il sistema lo apre con il lettore predefinito (Adobe Acrobat)
     const r = await fetch(`${API}/files/${kind}/${f.id}`, { credentials: "include", headers: t ? { Authorization: `Bearer ${t}` } : {} });
     const b = await r.blob();
-    setPreview({ url: URL.createObjectURL(b), filename: f.filename });
+    const url = URL.createObjectURL(new Blob([b], { type: "application/pdf" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = f.filename || "scheda.pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
   };
 
   if (!items.length) return (
@@ -49,25 +56,11 @@ function PdfList({ endpoint, kind }) {
               </div>
             </div>
             <button onClick={() => open(f)} className="lau-gold-btn px-3 py-2 rounded text-xs flex items-center gap-1" data-testid={`me-${kind}-open-${i}`}>
-              <Eye size={14} /> Apri
+              <Download size={14} /> Apri
             </button>
           </div>
         </div>
       ))}
-      {preview && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col p-4" onClick={() => setPreview(null)}>
-          <div className="flex justify-between items-center mb-2 text-white">
-            <div className="font-display font-bold uppercase">{preview.filename}</div>
-            <div className="flex gap-2">
-              <a href={preview.url} download={preview.filename} onClick={(e) => e.stopPropagation()} className="lau-gold-btn px-3 py-2 rounded text-xs flex items-center gap-1">
-                <Download size={14} /> Scarica
-              </a>
-              <button onClick={() => setPreview(null)} className="px-3 py-2 border border-[#262633] rounded text-xs text-white">Chiudi</button>
-            </div>
-          </div>
-          <iframe onClick={(e) => e.stopPropagation()} title="preview" src={preview.url} className="w-full flex-1 rounded bg-white" data-testid="me-preview-iframe" />
-        </div>
-      )}
     </div>
   );
 }
