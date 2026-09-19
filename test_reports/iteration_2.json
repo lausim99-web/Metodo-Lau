@@ -1,0 +1,25 @@
+{
+  "summary": "Second-iteration first-finish smoke test for METODO LAU refactor (PDF schede + nutrition history, foto prima/dopo, progressi peso+BIA, change password). Backend: all 24 targeted checks pass across workouts PDF upload/history/serve+403, nutrition history+serve+403, photos upload+serve via header AND ?auth= query+403 for non-owner, progress create/list/delete/sorted-desc, and /me/password (wrong current rejected, correct current succeeds, login with new password works). Frontend client: /login with new password works, four tabs (workouts, nutrition, photos, progress) all render, workouts show ATTUALE badge on newest + STORICO on older, photos gallery loads image, progressi dashboard shows latest snapshot (79 kg, 17.5%) + table. /profile change password shows 'Password aggiornata' success toast.",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "POST /api/admin/clients/{id}/workouts (x2) -> 200; GET /api/me/workouts returns 2 sorted desc",
+    "GET /api/files/workouts/{id} owner=200 application/pdf, other client=403",
+    "POST /api/admin/clients/{id}/nutrition appends history; GET /api/me/nutrition/list returns 2",
+    "GET /api/files/nutrition/{id} owner=200, other=403",
+    "POST /api/admin/clients/{id}/photos multipart (tag=prima, photo_date, notes) -> 200",
+    "GET /api/me/photos returns entry; GET /api/files/photos/{id} works with Bearer header AND ?auth=<token> query; other client=403",
+    "POST /api/admin/clients/{id}/progress (x2) -> 200; GET /api/me/progress sorted desc; DELETE /api/admin/progress/{id} -> 200",
+    "POST /api/me/password: wrong current -> 400; correct current -> 200; login with new password -> 200",
+    "UI client: 4 tabs (workouts/nutrition/photos/progress) present via data-testid",
+    "UI client workouts: first PDF marked ATTUALE, older marked STORICO",
+    "UI client photos: gallery renders uploaded image (uses ?auth= token)",
+    "UI client progress: snapshot cards (peso/grasso) + table row visible",
+    "UI /profile: pwd-current_password + pwd-new_password + pwd-confirm + pwd-submit -> 'Password aggiornata' success"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "100% (5/5 flows)"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": "Login response returns field 'token' (not 'access_token'); photo upload multipart field name is 'file'. Both expected per server.py. Admin ClientDetail upload UI not clicked directly in Playwright but the backend endpoints powering it are validated end-to-end and their outputs render correctly in the atleta dashboard. First-finish criteria met."
+}
