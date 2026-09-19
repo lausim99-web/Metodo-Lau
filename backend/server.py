@@ -5,11 +5,18 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 import os
+import re
 import uuid
 import logging
+import ipaddress
+import asyncio
+import httpx
 import bcrypt
 import jwt as pyjwt
 import requests as http_requests
+from html import escape
+from html.parser import HTMLParser
+from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Any
 from bson import ObjectId
@@ -26,7 +33,12 @@ JWT_ALG = "HS256"
 ADMIN_EMAIL = os.environ["ADMIN_EMAIL"].lower()
 ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 APP_NAME = os.environ.get("APP_NAME", "metodolau")
+APP_URL = os.environ.get("APP_URL", "https://lau-connect.preview.emergentagent.com").rstrip("/")
 EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
+EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "METODO LAU")
+EMAIL_REPLY_TO = os.environ.get("EMAIL_REPLY_TO")
+EMAIL_BASE_URL = "https://integrations.emergentagent.com"
 STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
 STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
 
@@ -84,6 +96,119 @@ def get_object(path: str):
         r = http_requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
     r.raise_for_status()
     return r.content, r.headers.get("Content-Type", "application/octet-stream")
+
+# ---------- Email (managed Resend) ----------
+_SHORTENERS = ("bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "goo.gl", "rebrand.ly")
+_CRED_ASK = ("reply with your password", "reply with the code", "send your password", "cvv",
+             "send us your password", "enter your password below", "confirm your card number",
+             "your full card number", "seed phrase", "recovery phrase", "verify your card",
+             "social security number", "confirm your bank details")
+_HOSTISH = re.compile(r"\b(?:https?://)?((?:[a-z0-9-]+\.)+[a-z]{2,})", re.I)
+
+def _host_ok(host: str) -> bool:
+    if not host or "xn--" in host:
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return False
+    except ValueError:
+        pass
+    return not any(host == s or host.endswith("." + s) for s in _SHORTENERS)
+
+def _same_site(shown: str, real: str) -> bool:
+    return shown == real or real.endswith("." + shown) or shown.endswith("." + real)
+
+class _EmailScan(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tags, self.urls, self.anchors = set(), [], []
+        self._href, self._text = None, []
+    def handle_starttag(self, tag, attrs):
+        self.tags.add(tag.lower())
+        self.urls += [v for k, v in attrs if k.lower() in ("href", "src") and v]
+        if tag.lower() == "a":
+            self._href = dict((k.lower(), v) for k, v in attrs).get("href")
+            self._text = []
+    def handle_data(self, data):
+        if self._href is not None:
+            self._text.append(data)
+    def handle_endtag(self, tag):
+        if tag.lower() == "a" and self._href is not None:
+            self.anchors.append((self._href, "".join(self._text)))
+            self._href, self._text = None, []
+
+def _assert_safe_email(subject: str, html: str) -> None:
+    scan = _EmailScan(); scan.feed(html)
+    if scan.tags & {"form", "input", "textarea", "select"}:
+        raise ValueError("No forms or input fields in email")
+    body = f"{subject}\n{html}".lower()
+    for p in _CRED_ASK:
+        if p in body:
+            raise ValueError(f"Email asks for credentials: {p!r}")
+    for url in scan.urls:
+        low = url.strip().lower()
+        if low.startswith(("mailto:", "tel:", "cid:", "#")):
+            continue
+        if not low.startswith("https://"):
+            raise ValueError(f"Email links/assets must be absolute https: {url!r}")
+        host = urlparse(low).hostname or ""
+        if not _host_ok(host) or urlparse(low).username is not None:
+            raise ValueError(f"Invalid URL in email: {url!r}")
+    for href, text in scan.anchors:
+        real = urlparse(href.strip().lower()).hostname or ""
+        if not real:
+            continue
+        for m in _HOSTISH.finditer(text):
+            if not _same_site(m.group(1).lower(), real):
+                raise ValueError(f"Anchor text {m.group(1)!r} != link host {real!r}")
+
+async def send_email(*, to: str, subject: str, html: str, reply_to: str = None):
+    if not EMAIL_KEY:
+        logger.warning("EMERGENT_EMAIL_KEY missing; email skipped")
+        return None
+    _assert_safe_email(subject, html)
+    payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
+    if reply_to or EMAIL_REPLY_TO:
+        payload["contact_email"] = reply_to or EMAIL_REPLY_TO
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(f"{EMAIL_BASE_URL}/api/v1/email/send",
+                                     headers={"X-Email-Key": EMAIL_KEY}, json=payload)
+        resp.raise_for_status()
+        return resp.json().get("id")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Email send failed: {e.response.status_code} {e.response.text}")
+        return None
+    except Exception as e:
+        logger.error(f"Email send error: {e}")
+        return None
+
+async def notify_client_upload(client_id: str, kind_label: str, title: str):
+    """Fire-and-forget email notification when PT uploads a workout or nutrition PDF."""
+    try:
+        client = await db.users.find_one({"_id": ObjectId(client_id)}, {"_id": 0, "email": 1, "name": 1})
+        if not client:
+            return
+        name = escape(client.get("name") or "Atleta")
+        label = escape(kind_label)
+        doc_title = escape(title or "")
+        subject = f"{EMAIL_FROM_NAME}: nuova {kind_label} caricata"
+        html = (
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
+            '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
+            'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
+            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODO LAU</div>'
+            f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">Nuova {label} disponibile</h1>'
+            f'<p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:0 0 16px">Ciao {name}, il tuo Personal Trainer ha appena caricato '
+            f'una nuova <strong style="color:#F5C518">{label}</strong>' + (f' &mdash; <em>{doc_title}</em>' if doc_title else '') + '.</p>'
+            f'<a href="{APP_URL}" style="display:inline-block;background:#F5C518;color:#0A0A0D;font-weight:bold;font-size:14px;'
+            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app METODO LAU</a>'
+            f'<p style="color:#52525b;font-size:12px;margin:24px 0 0">Inviata da {escape(EMAIL_FROM_NAME)}. Non chiediamo mai password o dati di pagamento via email.</p>'
+            '</td></tr></table></td></tr></table>'
+        )
+        await send_email(to=client["email"], subject=subject, html=html)
+    except Exception as e:
+        logger.error(f"notify_client_upload failed: {e}")
 
 # ---------- Auth Helpers ----------
 def hash_password(p: str) -> str:
@@ -350,6 +475,7 @@ async def upload_nutrition(client_id: str, title: str = Form(""), file: UploadFi
            "uploaded_at": datetime.now(timezone.utc).isoformat()}
     await db.nutrition.insert_one(doc)
     doc.pop("_id", None)
+    asyncio.create_task(notify_client_upload(client_id, "piano alimentare", doc["title"]))
     return doc
 
 async def _list_files(collection, user_id: str):
@@ -452,6 +578,7 @@ async def upload_workout(client_id: str, title: str = Form(""), file: UploadFile
            "uploaded_at": datetime.now(timezone.utc).isoformat()}
     await db.workouts.insert_one(doc)
     doc.pop("_id", None)
+    asyncio.create_task(notify_client_upload(client_id, "scheda di allenamento", doc["title"]))
     return doc
 
 @api.get("/admin/clients/{client_id}/workouts")

@@ -18,6 +18,8 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - Client: tabs Schede / Alimentazione / Foto / Progressi; viewer PDF in-app con download; galleria foto; dashboard progressi con grafico recharts (metrica cliccabile); card contatti PT (Instagram, WhatsApp, telefono, email)
 - Profilo con cambio password per entrambi i ruoli
 - Demo client "Mario Rossi" (mario.rossi@example.com / Mario2026!) seedato via /app/scripts/seed_mario.py con 1 scheda PDF, 1 piano alimentare PDF, 3 foto AI, 5 rilevazioni BIA
+- Notifica email automatica (Resend gestito, EMERGENT_EMAIL_KEY) all'atleta quando il PT carica nuova scheda o piano alimentare — template branded METODO LAU con link app; fire-and-forget via asyncio.create_task
+- PDF aperti inline in nuova scheda via ?auth= token query param
 - Logo mascotte con crop rounded-full (sfondo bianco eliminato via overflow-hidden + scale)
 - Testing: iterazione 1 e 2 al 100% pass backend + frontend
 
