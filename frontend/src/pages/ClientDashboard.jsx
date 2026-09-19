@@ -3,7 +3,7 @@ import AppShell from "../components/AppShell";
 import ContactCard from "../components/ContactCard";
 import { api, API, getToken, formatErr } from "../api";
 import { useAuth } from "../auth";
-import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download } from "lucide-react";
+import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
 const TABS = [
@@ -20,17 +20,8 @@ function PdfList({ endpoint, kind }) {
   useEffect(() => { api.get(endpoint).then((r) => setItems(r.data)).catch(() => setItems([])); }, [endpoint]);
 
   const open = async (f) => {
-    // scarica il PDF: il sistema lo apre con il lettore predefinito (Adobe Acrobat)
-    const r = await fetch(`${API}/files/${kind}/${f.id}`, { credentials: "include", headers: t ? { Authorization: `Bearer ${t}` } : {} });
-    const b = await r.blob();
-    const url = URL.createObjectURL(new Blob([b], { type: "application/pdf" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = f.filename || "scheda.pdf";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    // apre il PDF direttamente in una nuova scheda (Acrobat / lettore PDF del browser)
+    window.open(`${API}/files/${kind}/${f.id}?auth=${encodeURIComponent(t || "")}`, "_blank");
   };
 
   if (!items.length) return (
@@ -56,7 +47,7 @@ function PdfList({ endpoint, kind }) {
               </div>
             </div>
             <button onClick={() => open(f)} className="lau-gold-btn px-3 py-2 rounded text-xs flex items-center gap-1" data-testid={`me-${kind}-open-${i}`}>
-              <Download size={14} /> Apri
+              <Eye size={14} /> Apri
             </button>
           </div>
         </div>

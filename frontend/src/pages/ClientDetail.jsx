@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { api, formatErr, API, getToken } from "../api";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Download } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye } from "lucide-react";
 
 const TABS = [
   { key: "workouts", label: "Schede Allenamento", icon: Dumbbell },
@@ -26,14 +26,9 @@ function FileList({ items, kind, onDelete, viewToken }) {
               {i === 0 && <span className="ml-2 text-yellow-400">· ATTUALE</span>}
             </div>
           </div>
-          <a href={`${API}/files/${kind}/${f.id}`} target="_blank" rel="noreferrer"
-             className="p-2 text-zinc-300 hover:text-yellow-400" title="Scarica"
-             onClick={(e) => { e.preventDefault(); fetch(`${API}/files/${kind}/${f.id}`, { credentials: "include", headers: viewToken ? { Authorization: `Bearer ${viewToken}` } : {} }).then(r => r.blob()).then(b => {
-               const url = URL.createObjectURL(new Blob([b], { type: "application/pdf" }));
-               const a = document.createElement("a"); a.href = url; a.download = f.filename || "file.pdf"; document.body.appendChild(a); a.click(); a.remove();
-               setTimeout(() => URL.revokeObjectURL(url), 30000);
-             }); }}>
-            <Download size={16} />
+          <a href={`${API}/files/${kind}/${f.id}?auth=${encodeURIComponent(viewToken || "")}`} target="_blank" rel="noreferrer"
+             className="p-2 text-zinc-300 hover:text-yellow-400" title="Apri">
+            <Eye size={16} />
           </a>
           <button onClick={() => onDelete(f.id)} className="p-2 text-zinc-400 hover:text-red-400" title="Elimina" data-testid={`${kind}-del-${i}`}>
             <Trash2 size={16} />

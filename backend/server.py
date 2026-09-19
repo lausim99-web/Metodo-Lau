@@ -367,6 +367,25 @@ async def admin_nutrition_list(client_id: str, _: dict = Depends(require_admin))
 async def my_nutrition_list(user: dict = Depends(get_current_user)):
     return await _list_files(db.nutrition, user["id"])
 
+async def _token_user(request: Request) -> dict:
+    token = request.cookies.get("access_token")
+    if not token:
+        h = request.headers.get("Authorization", "")
+        if h.startswith("Bearer "):
+            token = h[7:]
+    if not token:
+        token = request.query_params.get("auth")
+    if not token:
+        raise HTTPException(401, "Not authenticated")
+    try:
+        payload = pyjwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+    except Exception:
+        raise HTTPException(401, "Invalid token")
+    user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+    if not user:
+        raise HTTPException(401, "User not found")
+    return {"id": str(user["_id"]), "role": user.get("role", "client")}
+
 async def _serve_file(collection, file_id: str, requester_id: str, is_admin: bool):
     doc = await collection.find_one({"id": file_id})
     if not doc:
@@ -378,8 +397,9 @@ async def _serve_file(collection, file_id: str, requester_id: str, is_admin: boo
                         headers={"Content-Disposition": f'inline; filename="{doc.get("filename","file.pdf")}"'})
 
 @api.get("/files/nutrition/{file_id}")
-async def download_nutrition(file_id: str, user: dict = Depends(get_current_user)):
-    return await _serve_file(db.nutrition, file_id, user["id"], user["role"] == "admin")
+async def download_nutrition(file_id: str, request: Request):
+    u = await _token_user(request)
+    return await _serve_file(db.nutrition, file_id, u["id"], u["role"] == "admin")
 
 @api.delete("/admin/nutrition/{file_id}")
 async def delete_nutrition(file_id: str, _: dict = Depends(require_admin)):
@@ -443,8 +463,9 @@ async def my_workouts(user: dict = Depends(get_current_user)):
     return await _list_files(db.workouts, user["id"])
 
 @api.get("/files/workouts/{file_id}")
-async def download_workout(file_id: str, user: dict = Depends(get_current_user)):
-    return await _serve_file(db.workouts, file_id, user["id"], user["role"] == "admin")
+async def download_workout(file_id: str, request: Request):
+    u = await _token_user(request)
+    return await _serve_file(db.workouts, file_id, u["id"], u["role"] == "admin")
 
 @api.delete("/admin/workouts/{file_id}")
 async def delete_workout(file_id: str, _: dict = Depends(require_admin)):
