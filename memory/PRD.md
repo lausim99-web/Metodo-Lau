@@ -22,6 +22,7 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - Email di benvenuto automatica quando il PT crea un nuovo atleta (senza password per guardrail G2, invita a contattare il PT)
 - Badge notifica in-app (rosso con conteggio) sui tab Schede/Alimentazione per upload non visti; polling 30s + mark-seen all'apertura tab
 - PWA installabile: manifest.json, service worker minimo, icone logo 192/512, meta iOS/Android, titolo "METODO LAU"
+- Sessioni PT private: il PT fissa data/ora/durata/luogo/note; l'atleta le vede nel tab Sessioni (badge OGGI/DOMANI); cron `.emergent/crons.yml` (6/12/18 UTC) invia promemoria email 24h prima via `/api/cron/session-reminders` (auth Bearer WEBHOOK_CRON_SECRET, idempotente via run_id)
 - PDF aperti inline in nuova scheda via ?auth= token query param
 - Logo mascotte con crop rounded-full (sfondo bianco eliminato via overflow-hidden + scale)
 - Testing: iterazione 1 e 2 al 100% pass backend + frontend

@@ -3,7 +3,7 @@ import AppShell from "../components/AppShell";
 import ContactCard from "../components/ContactCard";
 import { api, API, getToken, formatErr } from "../api";
 import { useAuth } from "../auth";
-import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye } from "lucide-react";
+import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye, Calendar } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
 const TABS = [
@@ -11,6 +11,7 @@ const TABS = [
   { key: "nutrition", label: "Alimentazione", icon: Utensils },
   { key: "photos", label: "Foto", icon: ImageIcon },
   { key: "progress", label: "Progressi", icon: Activity },
+  { key: "sessions", label: "Sessioni", icon: Calendar },
 ];
 
 function PdfList({ endpoint, kind }) {
@@ -216,6 +217,52 @@ function ProgressTab() {
   );
 }
 
+function SessionsTab() {
+  const [items, setItems] = useState([]);
+  useEffect(() => { api.get("/me/sessions").then((r) => setItems(r.data)).catch(() => {}); }, []);
+  if (!items.length) return (
+    <div className="lau-card p-8 text-center">
+      <Calendar className="mx-auto text-yellow-400 mb-3" size={40} />
+      <p className="text-lg text-white font-bold">Nessuna sessione programmata</p>
+      <p className="text-sm text-zinc-400 mt-2">Quando il PT fissa un allenamento privato apparirà qui — e ti arriverà un'email 24 ore prima.</p>
+    </div>
+  );
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  return (
+    <div className="space-y-3">
+      {items.map((s) => {
+        const isToday = s.date === today;
+        const isTomorrow = s.date === tomorrow;
+        return (
+          <div key={s.id} className={`lau-card p-5 lau-in ${isToday ? "border-yellow-500/70" : ""}`} data-testid={`me-session-${s.id}`}>
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-xl bg-yellow-400/10 border border-yellow-500/40 flex flex-col items-center justify-center shrink-0">
+                <div className="font-display font-black text-xl text-yellow-400 leading-none">{s.date.slice(8)}</div>
+                <div className="text-[9px] uppercase tracking-widest text-zinc-400 font-mono-num">
+                  {new Date(s.date + "T00:00").toLocaleDateString("it-IT", { month: "short" })}
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-display font-black text-lg uppercase text-white">Ore {s.time}</span>
+                  {isToday && <span className="text-[10px] uppercase tracking-widest font-mono-num px-2 py-0.5 rounded bg-yellow-400 text-black font-bold">OGGI</span>}
+                  {isTomorrow && <span className="text-[10px] uppercase tracking-widest font-mono-num px-2 py-0.5 rounded bg-yellow-400/15 text-yellow-400 border border-yellow-500/30">DOMANI</span>}
+                </div>
+                <div className="text-xs text-zinc-400 mt-1">
+                  {new Date(s.date + "T00:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })} · {s.duration_min} minuti
+                  {s.location && <> · {s.location}</>}
+                </div>
+                {s.notes && <div className="text-xs text-zinc-500 italic mt-1">"{s.notes}"</div>}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ClientDashboard() {
   const { user } = useAuth();
   const [tab, setTab] = useState("workouts");
@@ -269,6 +316,7 @@ export default function ClientDashboard() {
       {tab === "nutrition" && <PdfList endpoint="/me/nutrition/list" kind="nutrition" />}
       {tab === "photos" && <PhotosTab />}
       {tab === "progress" && <ProgressTab />}
+      {tab === "sessions" && <SessionsTab />}
       <div className="mt-6">
         <ContactCard />
       </div>

@@ -3,13 +3,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { api, formatErr, API, getToken } from "../api";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar } from "lucide-react";
 
 const TABS = [
   { key: "workouts", label: "Schede Allenamento", icon: Dumbbell },
   { key: "nutrition", label: "Alimentazione", icon: Utensils },
   { key: "photos", label: "Foto Prima/Dopo", icon: ImageIcon },
   { key: "progress", label: "Progressi & BIA", icon: Activity },
+  { key: "sessions", label: "Sessioni PT", icon: Calendar },
 ];
 
 function FileList({ items, kind, onDelete, viewToken }) {
@@ -279,6 +280,106 @@ function ProgressSection({ clientId }) {
   );
 }
 
+function SessionsSection({ clientId }) {
+  const [items, setItems] = useState([]);
+  const [f, setF] = useState({ date: "", time: "", duration_min: 60, location: "", notes: "" });
+  const load = async () => { const r = await api.get(`/admin/clients/${clientId}/sessions`); setItems(r.data); };
+  useEffect(() => { load(); }, [clientId]);
+
+  const add = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post(`/admin/clients/${clientId}/sessions`, f);
+      toast.success("Sessione creata — l'atleta riceverà il promemoria 24h prima");
+      setF({ date: "", time: "", duration_min: 60, location: "", notes: "" });
+      load();
+    } catch (e) { toast.error(formatErr(e)); }
+  };
+
+  const del = async (id) => {
+    if (!window.confirm("Eliminare questa sessione?")) return;
+    try { await api.delete(`/admin/sessions/${id}`); toast.success("Sessione eliminata"); load(); }
+    catch (e) { toast.error(formatErr(e)); }
+  };
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  return (
+    <div className="space-y-4">
+      <form onSubmit={add} className="lau-card p-5 space-y-3 lau-in">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="font-display font-bold uppercase text-white">Nuova sessione privata</div>
+          <div className="text-[10px] uppercase tracking-widest text-yellow-400 font-mono-num">Promemoria email 24h prima</div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4">
+          <div>
+            <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono-num block mb-1">Data</label>
+            <input type="date" required min={today} value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })}
+                   data-testid="session-date"
+                   className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono-num block mb-1">Ora</label>
+            <input type="time" required value={f.time} onChange={(e) => setF({ ...f, time: e.target.value })}
+                   data-testid="session-time"
+                   className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono-num block mb-1">Durata (min)</label>
+            <input type="number" min="15" step="15" value={f.duration_min} onChange={(e) => setF({ ...f, duration_min: Number(e.target.value) || 60 })}
+                   data-testid="session-duration"
+                   className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono-num block mb-1">Luogo (opz.)</label>
+            <input placeholder="Palestra, studio..." value={f.location} onChange={(e) => setF({ ...f, location: e.target.value })}
+                   data-testid="session-location"
+                   className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
+          </div>
+        </div>
+        <input placeholder="Note per l'atleta (opz. — cosa portare, focus della sessione...)" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })}
+               data-testid="session-notes"
+               className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
+        <button type="submit" data-testid="session-submit" className="lau-gold-btn px-4 py-2 rounded text-sm flex items-center gap-2">
+          <Plus size={16} /> Aggiungi sessione
+        </button>
+      </form>
+
+      <div className="lau-card p-4">
+        {items.length === 0 ? (
+          <div className="text-zinc-500 text-sm py-4 text-center">Nessuna sessione programmata.</div>
+        ) : (
+          <div className="space-y-2">
+            {items.map((s) => {
+              const past = s.date < today;
+              const tomorrow = s.date === new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+              return (
+                <div key={s.id} className={`flex items-center gap-3 p-3 rounded-lg border ${past ? "border-[#262633] opacity-50" : "border-yellow-500/30 bg-yellow-400/5"}`}
+                     data-testid={`session-${s.id}`}>
+                  <Calendar size={18} className={past ? "text-zinc-500" : "text-yellow-400"} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-white font-mono-num">
+                      {new Date(s.date + "T00:00").toLocaleDateString("it-IT", { weekday: "short", day: "2-digit", month: "short" })} · ore {s.time} · {s.duration_min}min
+                      {s.location && <span className="text-zinc-400"> · {s.location}</span>}
+                    </div>
+                    <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono-num mt-0.5">
+                      {past ? "PASSATA" : tomorrow ? (s.reminder_sent ? "DOMANI · promemoria inviato ✓" : "DOMANI · promemoria in programma") : "PROGRAMMATA"}
+                      {s.notes && <span className="normal-case tracking-normal text-zinc-500"> — {s.notes}</span>}
+                    </div>
+                  </div>
+                  <button onClick={() => del(s.id)} className="p-2 text-zinc-400 hover:text-red-400" data-testid={`del-session-${s.id}`}>
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ClientDetail() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -318,6 +419,7 @@ export default function ClientDetail() {
       {tab === "nutrition" && <PdfUploadSection clientId={id} kind="nutrition" label="Piano Alimentare (PDF)" />}
       {tab === "photos" && <PhotosSection clientId={id} />}
       {tab === "progress" && <ProgressSection clientId={id} />}
+      {tab === "sessions" && <SessionsSection clientId={id} />}
     </AppShell>
   );
 }

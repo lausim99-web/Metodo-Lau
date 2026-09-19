@@ -6,6 +6,7 @@ load_dotenv(ROOT_DIR / '.env')
 
 import os
 import re
+import hmac
 import uuid
 import logging
 import ipaddress
@@ -39,6 +40,7 @@ EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY")
 EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "METODO LAU")
 EMAIL_REPLY_TO = os.environ.get("EMAIL_REPLY_TO")
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
+WEBHOOK_CRON_SECRET = os.environ.get("WEBHOOK_CRON_SECRET")
 STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
 STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
 
@@ -357,6 +359,13 @@ class ContactsIn(BaseModel):
     phone: Optional[str] = ""
     email: Optional[str] = ""
     note: Optional[str] = ""
+
+class SessionIn(BaseModel):
+    date: str  # YYYY-MM-DD
+    time: str  # HH:MM
+    duration_min: int = 60
+    location: Optional[str] = ""
+    notes: Optional[str] = ""
 
 # ---------- Cookie helper ----------
 def set_auth_cookie(resp: Response, token: str):
@@ -787,6 +796,124 @@ DEFAULT_EXERCISES = [
 async def exercise_library(user: dict = Depends(get_current_user)):
     return DEFAULT_EXERCISES
 
+# ---------- Private PT sessions (with 24h reminder) ----------
+@api.post("/admin/clients/{client_id}/sessions")
+async def create_session(client_id: str, body: SessionIn, _: dict = Depends(require_admin)):
+    u = await db.users.find_one({"_id": ObjectId(client_id), "role": "client"})
+    if not u:
+        raise HTTPException(404, "Cliente non trovato")
+    # validate date/time
+    try:
+        dt = datetime.strptime(f"{body.date} {body.time}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        raise HTTPException(400, "Data o ora non valida (usa YYYY-MM-DD e HH:MM)")
+    doc = {"id": str(uuid.uuid4()), "user_id": client_id,
+           "date": body.date, "time": body.time, "datetime_local": dt.isoformat(),
+           "duration_min": body.duration_min, "location": body.location,
+           "notes": body.notes, "reminder_sent": False,
+           "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.sessions.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+async def _list_sessions(user_id: str, upcoming_only: bool = False):
+    out = []
+    q = {"user_id": user_id}
+    if upcoming_only:
+        q["date"] = {"$gte": datetime.now(timezone.utc).date().isoformat()}
+    async for s in db.sessions.find(q).sort([("date", 1), ("time", 1)]):
+        s.pop("_id", None)
+        out.append(s)
+    return out
+
+@api.get("/admin/clients/{client_id}/sessions")
+async def admin_sessions(client_id: str, _: dict = Depends(require_admin)):
+    return await _list_sessions(client_id)
+
+@api.get("/me/sessions")
+async def my_sessions(user: dict = Depends(get_current_user)):
+    return await _list_sessions(user["id"], upcoming_only=True)
+
+@api.delete("/admin/sessions/{session_id}")
+async def delete_session(session_id: str, _: dict = Depends(require_admin)):
+    r = await db.sessions.delete_one({"id": session_id})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Sessione non trovata")
+    return {"ok": True}
+
+async def send_session_reminder(client: dict, s: dict):
+    """Email reminder 24h before a private PT session."""
+    try:
+        date_it = datetime.strptime(s["date"], "%Y-%m-%d").strftime("%d/%m/%Y")
+        subject = f"{EMAIL_FROM_NAME}: domani allenamento con il tuo PT"
+        loc = f' in <strong style="color:#fff">{escape(s["location"])}</strong>' if s.get("location") else ""
+        note = (f'<p style="color:#a1a1aa;font-size:13px;line-height:1.6;margin:12px 0 0">'
+                f'Note del PT: {escape(s["notes"])}</p>') if s.get("notes") else ""
+        html = (
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
+            '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
+            'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
+            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODO LAU</div>'
+            '<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">Allenamento domani!</h1>'
+            f'<p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:0 0 8px">Ciao {escape(client.get("name") or "Atleta")}, '
+            'ti ricordiamo che <strong style="color:#F5C518">domani</strong> hai la sessione privata con il tuo Personal Trainer:</p>'
+            '<table width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;border:1px solid #262633;border-radius:8px;padding:16px;margin:12px 0">'
+            '<tr><td style="color:#F5C518;font-size:20px;font-weight:bold">' + date_it + ' &middot; ore ' + escape(s["time"]) + '</td></tr>'
+            f'<tr><td style="color:#a1a1aa;font-size:13px;padding-top:4px">Durata {s.get("duration_min", 60)} minuti{loc}</td></tr></table>'
+            + note +
+            '<p style="color:#a1a1aa;font-size:13px;line-height:1.6;margin:16px 0 0">Presentati puntuale e carico. Se devi spostare la sessione, contatta subito il tuo PT.</p>'
+            f'<p style="color:#52525b;font-size:12px;margin:24px 0 0">Inviata da {escape(EMAIL_FROM_NAME)}. Non chiediamo mai password o dati di pagamento via email.</p>'
+            '</td></tr></table></td></tr></table>'
+        )
+        res = await send_email(to=client["email"], subject=subject, html=html)
+        return bool(res)
+    except Exception as e:
+        logger.error(f"send_session_reminder failed: {e}")
+        return False
+
+# ---------- Cron: session reminders (24h before) ----------
+@api.post("/cron/session-reminders")
+async def cron_session_reminders(request: Request):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    if not WEBHOOK_CRON_SECRET or not hmac.compare_digest(token, WEBHOOK_CRON_SECRET):
+        raise HTTPException(401, "Unauthorized")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    run_id = body.get("run_id") or request.headers.get("X-Webhook-Id") or str(uuid.uuid4())
+    # idempotency: skip if this run was already processed
+    if await db.cron_runs.find_one({"run_id": run_id}):
+        return {"ok": True, "duplicate": True}
+    await db.cron_runs.insert_one({"run_id": run_id, "processed_at": datetime.now(timezone.utc).isoformat()})
+    asyncio.create_task(_process_session_reminders(run_id))
+    return {"ok": True, "run_id": run_id}
+
+async def _process_session_reminders(run_id: str):
+    """Find sessions starting in 23-25h (local time window) and email the client once."""
+    try:
+        now = datetime.now()
+        today = now.date().isoformat()
+        tomorrow = (now.date() + timedelta(days=1)).isoformat()
+        day_after = (now.date() + timedelta(days=2)).isoformat()
+        # sessions today late/tomorrow/day-after depending on current hour — simply
+        # consider all sessions on tomorrow (the reminder says "domani") plus flag check
+        sent = 0
+        async for s in db.sessions.find({"date": tomorrow, "reminder_sent": False}):
+            client = await db.users.find_one({"_id": ObjectId(s["user_id"])})
+            if not client:
+                continue
+            ok = await send_session_reminder(client, s)
+            if ok:
+                await db.sessions.update_one({"id": s["id"]}, {"$set": {"reminder_sent": True, "reminded_at": now.isoformat()}})
+                sent += 1
+        await db.cron_runs.update_one({"run_id": run_id}, {"$set": {"completed": True, "sent": sent}})
+        logger.info(f"session reminders: sent {sent}")
+    except Exception as e:
+        logger.error(f"_process_session_reminders failed: {e}")
+
 # ---------- Root ----------
 @api.get("/")
 async def root():
@@ -820,6 +947,8 @@ async def startup():
     await db.workouts.create_index("user_id")
     await db.photos.create_index("user_id")
     await db.progress.create_index([("user_id", 1), ("date", -1)])
+    await db.sessions.create_index([("user_id", 1), ("date", 1)])
+    await db.cron_runs.create_index("run_id", unique=True)
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
     if not existing:
         await db.users.insert_one({

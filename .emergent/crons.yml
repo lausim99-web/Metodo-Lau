@@ -1,0 +1,9 @@
+crons:
+  # 6:00/12:00/18:00 UTC = 8:00/14:00/20:00 in Italia (CEST) — copre mattina, pomeriggio e sera
+  - name: session-reminders
+    description: "Promemoria email agli atleti che domani hanno una sessione privata con il PT (8, 14 e 20 italiane)"
+    cron: "0 6,12,18 * * *"
+    endpoint: "{{BASE_URL}}/api/cron/session-reminders"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
