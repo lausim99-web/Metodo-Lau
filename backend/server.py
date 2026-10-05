@@ -1084,10 +1084,8 @@ async def startup():
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
         logger.info(f"Admin created: {ADMIN_EMAIL}")
-    else:
-        if not verify_password(ADMIN_PASSWORD, existing["password_hash"]):
-            await db.users.update_one({"email": ADMIN_EMAIL},
-                                      {"$set": {"password_hash": hash_password(ADMIN_PASSWORD), "role": "admin"}})
+    elif existing.get("role") != "admin":
+        await db.users.update_one({"email": ADMIN_EMAIL}, {"$set": {"role": "admin"}})
     init_storage()
 
 @app.on_event("shutdown")
