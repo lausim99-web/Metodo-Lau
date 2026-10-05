@@ -1,0 +1,23 @@
+{
+  "summary": "Iteration 4: tested all 6 new features (login remember flag, admin search/sort, PT guide links, file inline/attachment download, workout expires_at, cron plan-expiry + session-reminders). Backend: 11/11 pytest tests passed. Frontend: all data-testids present and functional; UI integration verified end-to-end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter4_features.py",
+    "/app/test_reports/pytest/iter4_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 1095 lines — approaching the 700-line split guideline; consider modularising (cron, files, auth, admin) into separate routers.",
+    "Cron idempotency inserts a cron_runs doc BEFORE kicking off the background task; if the asyncio.create_task crashes before completion, the duplicate guard will block retries. Consider marking completed only after success or allowing retry on failed runs.",
+    "In _process_session_reminders, after send_session_reminder returns False (e.g., Resend 422), the reminder flag is NOT set — this means every hourly cron will retry sending until the session passes. For undeliverable recipients this generates perpetual 422s in logs. Consider recording an attempt_count and backing off."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter4_features.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Admin lausim99@gmail.com / MetodoLau2026! ; Athlete mario.rossi@example.com / Mario2026!",
+  "seed_data_creation": "Created and deleted one TEST session for mario during session-reminder e2e test. Contacts guide links were set to https://example.com/guide-workout and https://example.com/guide-nutrition (persisted — main agent may wish to clear if needed).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_iter4_features.py covers login remember, contacts guides persistence, file inline/attachment, workout expires_at (+42d), cron auth + idempotency, and e2e session reminder. Backend logs confirm 'plan expiry: sent N' and 'session reminders: sent N' and expected 422 undeliverable for example.com recipients. Pytest runs via: python -m pytest backend/tests/test_iter4_features.py -o 'addopts=' -v",
+  "rca of the issue": "N/A — no issues found."
+}

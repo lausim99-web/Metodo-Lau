@@ -33,6 +33,16 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - Iterazione 2: **PASS** — pronta per il deploy Kubernetes
 - Pending: deploy in produzione (~50 crediti/mese), dominio personalizzato opzionale
 
+## Implemented (2026-06, fork 2)
+- Scadenza schede 6 settimane: `expires_at` su upload workout/nutrition; cron giornaliero `/api/cron/plan-expiry` (7 UTC) email a 7gg/1g/0g ad atleta + PT (ADMIN_EMAIL), idempotente via `expiry_notified`; l'atleta vede "Scade tra N giorni"
+- Promemoria sessioni 24h E 1h prima: cron orario `/api/cron/session-reminders`, orario Europe/Rome, flag `reminder_24h_sent`/`reminder_1h_sent`
+- Admin: ricerca atleti per nome/email + ordinamento A→Z / Z→A / Recenti
+- Login "Rimani collegato" (30gg, localStorage) vs sessione (1g, sessionStorage)
+- Link guida PT (`guide_workout`, `guide_nutrition` in /api/contacts) mostrati come "Come leggere..." nei tab Schede/Alimentazione
+- Pulsante "Scarica" (`?download=1` → Content-Disposition attachment) accanto ad "Apri"
+- Font corpo email aumentato a 17px
+- Testing: iterazione 4 100% pass
+
 ## Backlog (P1)
 - Cambio password lato atleta dopo primo login
 - Storico progressione peso per esercizio (grafico recharts)
