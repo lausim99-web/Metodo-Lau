@@ -19,6 +19,7 @@ from html import escape
 from html.parser import HTMLParser
 from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from typing import List, Optional, Any
 from bson import ObjectId
 
@@ -43,6 +44,10 @@ EMAIL_BASE_URL = "https://integrations.emergentagent.com"
 WEBHOOK_CRON_SECRET = os.environ.get("WEBHOOK_CRON_SECRET")
 STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
 STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
+ROME = ZoneInfo("Europe/Rome")
+PLAN_DURATION_DAYS = 42  # 6 settimane
+EXPIRY_STAGES = {7: "7d", 1: "1d", 0: "0d"}
+BODY = "color:#e4e4e7;font-size:17px;line-height:1.7"
 
 mongo_url = os.environ['MONGO_URL']
 mongo_client = AsyncIOMotorClient(mongo_url)
@@ -201,7 +206,7 @@ async def notify_client_upload(client_id: str, kind_label: str, title: str):
             'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
             '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODO LAU</div>'
             f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">Nuova {label} disponibile</h1>'
-            f'<p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:0 0 16px">Ciao {name}, il tuo Personal Trainer ha appena caricato '
+            f'<p style="color:#e4e4e7;font-size:17px;line-height:1.7;margin:0 0 16px">Ciao {name}, il tuo Personal Trainer ha appena caricato '
             f'una nuova <strong style="color:#F5C518">{label}</strong>' + (f' &mdash; <em>{doc_title}</em>' if doc_title else '') + '.</p>'
             f'<a href="{APP_URL}" style="display:inline-block;background:#F5C518;color:#0A0A0D;font-weight:bold;font-size:14px;'
             'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app METODO LAU</a>'
@@ -223,12 +228,12 @@ async def send_welcome_email(email: str, name: str):
             'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
             '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODO LAU</div>'
             f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">Benvenuto, {escape(name)}</h1>'
-            '<p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:0 0 8px">Il tuo Personal Trainer ha creato il tuo account METODO LAU.</p>'
-            f'<p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:0 0 16px">Accedi con la tua email (<strong style="color:#fff">{escape(email)}</strong>) '
+            '<p style="color:#e4e4e7;font-size:17px;line-height:1.7;margin:0 0 8px">Il tuo Personal Trainer ha creato il tuo account METODO LAU.</p>'
+            f'<p style="color:#e4e4e7;font-size:17px;line-height:1.7;margin:0 0 16px">Accedi con la tua email (<strong style="color:#fff">{escape(email)}</strong>) '
             'e la password che il tuo PT ti ha comunicato personalmente.</p>'
             f'<a href="{APP_URL}" style="display:inline-block;background:#F5C518;color:#0A0A0D;font-weight:bold;font-size:14px;'
             'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app METODO LAU</a>'
-            '<p style="color:#a1a1aa;font-size:13px;line-height:1.6;margin:20px 0 0">Dentro trovi la tua scheda di allenamento, il piano alimentare, '
+            '<p style="color:#d4d4d8;font-size:16px;line-height:1.7;margin:20px 0 0">Dentro trovi la tua scheda di allenamento, il piano alimentare, '
             'le foto dei progressi e le tue rilevazioni.</p>'
             f'<p style="color:#52525b;font-size:12px;margin:24px 0 0">Inviata da {escape(EMAIL_FROM_NAME)}. Non chiediamo mai password o dati di pagamento via email.</p>'
             '</td></tr></table></td></tr></table>'
@@ -247,9 +252,9 @@ def verify_password(p: str, h: str) -> bool:
     except Exception:
         return False
 
-def create_access_token(uid: str, email: str, role: str) -> str:
+def create_access_token(uid: str, email: str, role: str, days: int = 1) -> str:
     return pyjwt.encode({"sub": uid, "email": email, "role": role,
-                         "exp": datetime.now(timezone.utc) + timedelta(days=7),
+                         "exp": datetime.now(timezone.utc) + timedelta(days=days),
                          "type": "access"}, JWT_SECRET, algorithm=JWT_ALG)
 
 async def get_current_user(request: Request) -> dict:
@@ -297,6 +302,7 @@ async def mark_seen(kind: str, user: dict = Depends(get_current_user)):
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
+    remember: bool = False
 
 class CreateClientIn(BaseModel):
     email: EmailStr
@@ -359,6 +365,8 @@ class ContactsIn(BaseModel):
     phone: Optional[str] = ""
     email: Optional[str] = ""
     note: Optional[str] = ""
+    guide_workout: Optional[str] = ""
+    guide_nutrition: Optional[str] = ""
 
 class SessionIn(BaseModel):
     date: str  # YYYY-MM-DD
@@ -368,9 +376,9 @@ class SessionIn(BaseModel):
     notes: Optional[str] = ""
 
 # ---------- Cookie helper ----------
-def set_auth_cookie(resp: Response, token: str):
+def set_auth_cookie(resp: Response, token: str, days: Optional[int] = None):
     resp.set_cookie("access_token", token, httponly=True, secure=True,
-                    samesite="none", max_age=60 * 60 * 24 * 7, path="/")
+                    samesite="none", max_age=(60 * 60 * 24 * days) if days else None, path="/")
 
 # ---------- Auth Routes ----------
 @api.post("/auth/login")
@@ -379,8 +387,9 @@ async def login(body: LoginIn, response: Response):
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(body.password, user["password_hash"]):
         raise HTTPException(401, "Email o password errati")
-    token = create_access_token(str(user["_id"]), email, user["role"])
-    set_auth_cookie(response, token)
+    days = 30 if body.remember else 1
+    token = create_access_token(str(user["_id"]), email, user["role"], days)
+    set_auth_cookie(response, token, days if body.remember else None)
     return {"id": str(user["_id"]), "email": email, "name": user["name"], "role": user["role"], "token": token}
 
 @api.post("/auth/logout")
@@ -514,6 +523,15 @@ async def client_logs(client_id: str, _: dict = Depends(require_admin)):
         out.append(l)
     return out
 
+def _expiry_from_now() -> str:
+    return (datetime.now(ROME).date() + timedelta(days=PLAN_DURATION_DAYS)).isoformat()
+
+def _expiry_of(doc: dict) -> str:
+    if doc.get("expires_at"):
+        return doc["expires_at"]
+    up = datetime.fromisoformat(doc["uploaded_at"].replace("Z", "+00:00"))
+    return (up.astimezone(ROME).date() + timedelta(days=PLAN_DURATION_DAYS)).isoformat()
+
 # ---------- Nutrition PDF ----------
 @api.post("/admin/clients/{client_id}/nutrition")
 async def upload_nutrition(client_id: str, title: str = Form(""), file: UploadFile = File(...), _: dict = Depends(require_admin)):
@@ -530,7 +548,8 @@ async def upload_nutrition(client_id: str, title: str = Form(""), file: UploadFi
     doc = {"id": str(uuid.uuid4()), "user_id": client_id, "storage_path": result["path"],
            "filename": file.filename, "title": title or file.filename,
            "size": result.get("size", len(data)), "seen": False,
-           "uploaded_at": datetime.now(timezone.utc).isoformat()}
+           "uploaded_at": datetime.now(timezone.utc).isoformat(),
+           "expires_at": _expiry_from_now(), "expiry_notified": []}
     await db.nutrition.insert_one(doc)
     doc.pop("_id", None)
     asyncio.create_task(notify_client_upload(client_id, "piano alimentare", doc["title"]))
@@ -540,6 +559,7 @@ async def _list_files(collection, user_id: str):
     out = []
     async for f in collection.find({"user_id": user_id}).sort("uploaded_at", -1).limit(100):
         f.pop("_id", None)
+        f["expires_at"] = _expiry_of(f)
         out.append(f)
     return out
 
@@ -570,20 +590,22 @@ async def _token_user(request: Request) -> dict:
         raise HTTPException(401, "User not found")
     return {"id": str(user["_id"]), "role": user.get("role", "client")}
 
-async def _serve_file(collection, file_id: str, requester_id: str, is_admin: bool):
+async def _serve_file(collection, file_id: str, requester_id: str, is_admin: bool, download: bool = False):
     doc = await collection.find_one({"id": file_id})
     if not doc:
         raise HTTPException(404, "File non trovato")
     if not is_admin and doc["user_id"] != requester_id:
         raise HTTPException(403, "Non autorizzato")
     data, ct = get_object(doc["storage_path"])
+    disp = "attachment" if download else "inline"
+    fname = re.sub(r'[^\w.\- ]', '_', doc.get("filename") or "file.pdf")
     return FastResponse(content=data, media_type=doc.get("content_type") or "application/pdf",
-                        headers={"Content-Disposition": f'inline; filename="{doc.get("filename","file.pdf")}"'})
+                        headers={"Content-Disposition": f'{disp}; filename="{fname}"'})
 
 @api.get("/files/nutrition/{file_id}")
-async def download_nutrition(file_id: str, request: Request):
+async def download_nutrition(file_id: str, request: Request, download: int = 0):
     u = await _token_user(request)
-    return await _serve_file(db.nutrition, file_id, u["id"], u["role"] == "admin")
+    return await _serve_file(db.nutrition, file_id, u["id"], u["role"] == "admin", bool(download))
 
 @api.delete("/admin/nutrition/{file_id}")
 async def delete_nutrition(file_id: str, _: dict = Depends(require_admin)):
@@ -633,7 +655,8 @@ async def upload_workout(client_id: str, title: str = Form(""), file: UploadFile
     doc = {"id": str(uuid.uuid4()), "user_id": client_id, "storage_path": result["path"],
            "filename": file.filename, "title": title or file.filename,
            "size": result.get("size", len(data)), "seen": False,
-           "uploaded_at": datetime.now(timezone.utc).isoformat()}
+           "uploaded_at": datetime.now(timezone.utc).isoformat(),
+           "expires_at": _expiry_from_now(), "expiry_notified": []}
     await db.workouts.insert_one(doc)
     doc.pop("_id", None)
     asyncio.create_task(notify_client_upload(client_id, "scheda di allenamento", doc["title"]))
@@ -648,9 +671,9 @@ async def my_workouts(user: dict = Depends(get_current_user)):
     return await _list_files(db.workouts, user["id"])
 
 @api.get("/files/workouts/{file_id}")
-async def download_workout(file_id: str, request: Request):
+async def download_workout(file_id: str, request: Request, download: int = 0):
     u = await _token_user(request)
-    return await _serve_file(db.workouts, file_id, u["id"], u["role"] == "admin")
+    return await _serve_file(db.workouts, file_id, u["id"], u["role"] == "admin", bool(download))
 
 @api.delete("/admin/workouts/{file_id}")
 async def delete_workout(file_id: str, _: dict = Depends(require_admin)):
@@ -768,7 +791,7 @@ async def delete_progress(entry_id: str, _: dict = Depends(require_admin)):
 @api.get("/contacts")
 async def get_contacts(user: dict = Depends(get_current_user)):
     s = await db.settings.find_one({"key": "contacts"})
-    return s["value"] if s else {"instagram": "", "whatsapp": "", "phone": "", "email": "", "note": ""}
+    return {**ContactsIn().model_dump(), **(s["value"] if s else {})}
 
 @api.put("/admin/contacts")
 async def set_contacts(body: ContactsIn, _: dict = Depends(require_admin)):
@@ -850,27 +873,31 @@ async def delete_session(session_id: str, _: dict = Depends(require_admin)):
         raise HTTPException(404, "Sessione non trovata")
     return {"ok": True}
 
-async def send_session_reminder(client: dict, s: dict):
-    """Email reminder 24h before a private PT session."""
+async def send_session_reminder(client: dict, s: dict, stage: str = "24h"):
+    """Email reminder 24h or 1h before a private PT session."""
     try:
         date_it = datetime.strptime(s["date"], "%Y-%m-%d").strftime("%d/%m/%Y")
-        subject = f"{EMAIL_FROM_NAME}: domani allenamento con il tuo PT"
+        soon = stage == "1h"
+        subject = (f"{EMAIL_FROM_NAME}: tra un'ora allenamento con il tuo PT" if soon
+                   else f"{EMAIL_FROM_NAME}: domani allenamento con il tuo PT")
+        headline = "Ci siamo: tra un'ora!" if soon else "Allenamento domani!"
+        when = "tra <strong style=\"color:#F5C518\">circa un'ora</strong>" if soon else "<strong style=\"color:#F5C518\">domani</strong>"
         loc = f' in <strong style="color:#fff">{escape(s["location"])}</strong>' if s.get("location") else ""
-        note = (f'<p style="color:#a1a1aa;font-size:13px;line-height:1.6;margin:12px 0 0">'
+        note = (f'<p style="color:#d4d4d8;font-size:16px;line-height:1.7;margin:12px 0 0">'
                 f'Note del PT: {escape(s["notes"])}</p>') if s.get("notes") else ""
         html = (
             '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
             '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
             'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
             '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODO LAU</div>'
-            '<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">Allenamento domani!</h1>'
-            f'<p style="color:#a1a1aa;font-size:14px;line-height:1.6;margin:0 0 8px">Ciao {escape(client.get("name") or "Atleta")}, '
-            'ti ricordiamo che <strong style="color:#F5C518">domani</strong> hai la sessione privata con il tuo Personal Trainer:</p>'
+            f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">{headline}</h1>'
+            f'<p style="color:#e4e4e7;font-size:17px;line-height:1.7;margin:0 0 8px">Ciao {escape(client.get("name") or "Atleta")}, '
+            f'ti ricordiamo che {when} hai la sessione privata con il tuo Personal Trainer:</p>'
             '<table width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;border:1px solid #262633;border-radius:8px;padding:16px;margin:12px 0">'
             '<tr><td style="color:#F5C518;font-size:20px;font-weight:bold">' + date_it + ' &middot; ore ' + escape(s["time"]) + '</td></tr>'
             f'<tr><td style="color:#a1a1aa;font-size:13px;padding-top:4px">Durata {s.get("duration_min", 60)} minuti{loc}</td></tr></table>'
             + note +
-            '<p style="color:#a1a1aa;font-size:13px;line-height:1.6;margin:16px 0 0">Presentati puntuale e carico. Se devi spostare la sessione, contatta subito il tuo PT.</p>'
+            '<p style="color:#d4d4d8;font-size:16px;line-height:1.7;margin:16px 0 0">Presentati puntuale e carico. Se devi spostare la sessione, contatta subito il tuo PT.</p>'
             f'<p style="color:#52525b;font-size:12px;margin:24px 0 0">Inviata da {escape(EMAIL_FROM_NAME)}. Non chiediamo mai password o dati di pagamento via email.</p>'
             '</td></tr></table></td></tr></table>'
         )
@@ -901,27 +928,116 @@ async def cron_session_reminders(request: Request):
     return {"ok": True, "run_id": run_id}
 
 async def _process_session_reminders(run_id: str):
-    """Find sessions starting in 23-25h (local time window) and email the client once."""
+    """Hourly: email 24h before (delta <= 24h) and 1h before (delta <= 75min), Italy time."""
     try:
-        now = datetime.now()
+        now = datetime.now(ROME)
         today = now.date().isoformat()
-        tomorrow = (now.date() + timedelta(days=1)).isoformat()
-        day_after = (now.date() + timedelta(days=2)).isoformat()
-        # sessions today late/tomorrow/day-after depending on current hour — simply
-        # consider all sessions on tomorrow (the reminder says "domani") plus flag check
         sent = 0
-        async for s in db.sessions.find({"date": tomorrow, "reminder_sent": False}):
+        async for s in db.sessions.find({"date": {"$gte": today}}):
+            try:
+                dt = datetime.strptime(f"{s['date']} {s['time']}", "%Y-%m-%d %H:%M").replace(tzinfo=ROME)
+            except ValueError:
+                continue
+            delta = dt - now
+            if delta.total_seconds() <= 0:
+                continue
             client = await db.users.find_one({"_id": ObjectId(s["user_id"])})
             if not client:
                 continue
-            ok = await send_session_reminder(client, s)
-            if ok:
-                await db.sessions.update_one({"id": s["id"]}, {"$set": {"reminder_sent": True, "reminded_at": now.isoformat()}})
-                sent += 1
+            updates = {}
+            sent_24 = s.get("reminder_24h_sent") or s.get("reminder_sent")
+            if delta <= timedelta(minutes=75) and not s.get("reminder_1h_sent"):
+                if await send_session_reminder(client, s, "1h"):
+                    updates.update({"reminder_1h_sent": True, "reminder_24h_sent": True, "reminder_sent": True})
+                    sent += 1
+            elif delta <= timedelta(hours=24) and not sent_24:
+                if await send_session_reminder(client, s, "24h"):
+                    updates.update({"reminder_24h_sent": True, "reminder_sent": True})
+                    sent += 1
+            if updates:
+                updates["reminded_at"] = now.isoformat()
+                await db.sessions.update_one({"id": s["id"]}, {"$set": updates})
         await db.cron_runs.update_one({"run_id": run_id}, {"$set": {"completed": True, "sent": sent}})
         logger.info(f"session reminders: sent {sent}")
     except Exception as e:
         logger.error(f"_process_session_reminders failed: {e}")
+
+# ---------- Cron: plan expiry (6 settimane) ----------
+async def send_expiry_email(client: dict, kind_label: str, title: str, days_left: int, pt_email: Optional[str]):
+    try:
+        name = escape(client.get("name") or "Atleta")
+        label = escape(kind_label)
+        if days_left == 0:
+            head, when = f"La tua {label} è scaduta oggi", "scade <strong style=\"color:#F5C518\">oggi</strong>"
+        elif days_left == 1:
+            head, when = f"La tua {label} scade domani", "scade <strong style=\"color:#F5C518\">domani</strong>"
+        else:
+            head, when = f"La tua {label} scade tra {days_left} giorni", f"scade tra <strong style=\"color:#F5C518\">{days_left} giorni</strong>"
+        subject = f"{EMAIL_FROM_NAME}: {head}"
+        html = (
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
+            '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
+            'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
+            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODO LAU</div>'
+            f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">{head}</h1>'
+            f'<p style="{BODY};margin:0 0 16px">Ciao {name}, la tua <strong style="color:#F5C518">{label}</strong>'
+            + (f' <em>{escape(title)}</em>' if title else '') + f' {when}: sono passate 6 settimane. '
+            'È il momento di aggiornarla con il tuo Personal Trainer per continuare a progredire.</p>'
+            f'<a href="{APP_URL}" style="display:inline-block;background:#F5C518;color:#0A0A0D;font-weight:bold;font-size:14px;'
+            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app METODO LAU</a>'
+            f'<p style="color:#52525b;font-size:12px;margin:24px 0 0">Inviata da {escape(EMAIL_FROM_NAME)}. Non chiediamo mai password o dati di pagamento via email.</p>'
+            '</td></tr></table></td></tr></table>'
+        )
+        ok = await send_email(to=client["email"], subject=subject, html=html)
+        if pt_email:
+            pt_html = html.replace(f"Ciao {name},", f"Promemoria PT &mdash; atleta <strong style=\"color:#fff\">{name}</strong>:", 1)
+            await send_email(to=pt_email, subject=f"[PT] {name}: {head}", html=pt_html)
+        return bool(ok)
+    except Exception as e:
+        logger.error(f"send_expiry_email failed: {e}")
+        return False
+
+@api.post("/cron/plan-expiry")
+async def cron_plan_expiry(request: Request):
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    if not WEBHOOK_CRON_SECRET or not hmac.compare_digest(token, WEBHOOK_CRON_SECRET):
+        raise HTTPException(401, "Unauthorized")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    run_id = body.get("run_id") or request.headers.get("X-Webhook-Id") or str(uuid.uuid4())
+    if await db.cron_runs.find_one({"run_id": run_id}):
+        return {"ok": True, "duplicate": True}
+    await db.cron_runs.insert_one({"run_id": run_id, "processed_at": datetime.now(timezone.utc).isoformat()})
+    asyncio.create_task(_process_plan_expiry(run_id))
+    return {"ok": True, "run_id": run_id}
+
+async def _process_plan_expiry(run_id: str):
+    """Daily: for each athlete's CURRENT workout/nutrition PDF, email at 7d, 1d and 0d before expiry."""
+    try:
+        today = datetime.now(ROME).date()
+        sent = 0
+        for coll, label in ((db.workouts, "scheda di allenamento"), (db.nutrition, "piano alimentare")):
+            latest = {}
+            async for f in coll.find({}).sort("uploaded_at", -1):
+                latest.setdefault(f["user_id"], f)
+            for uid, f in latest.items():
+                days_left = (datetime.fromisoformat(_expiry_of(f)).date() - today).days
+                stage = EXPIRY_STAGES.get(days_left)
+                if not stage or stage in (f.get("expiry_notified") or []):
+                    continue
+                client = await db.users.find_one({"_id": ObjectId(uid)})
+                if not client:
+                    continue
+                if await send_expiry_email(client, label, f.get("title") or "", days_left, ADMIN_EMAIL):
+                    await coll.update_one({"id": f["id"]}, {"$addToSet": {"expiry_notified": stage}})
+                    sent += 1
+        await db.cron_runs.update_one({"run_id": run_id}, {"$set": {"completed": True, "sent": sent}})
+        logger.info(f"plan expiry: sent {sent}")
+    except Exception as e:
+        logger.error(f"_process_plan_expiry failed: {e}")
 
 # ---------- Root ----------
 @api.get("/")

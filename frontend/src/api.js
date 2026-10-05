@@ -8,10 +8,13 @@ export const api = axios.create({
   withCredentials: true,
 });
 
-// Persist bearer token as a backup to cookies (cross-site)
+// Persist bearer token: localStorage if "rimani collegato", otherwise sessionStorage
 const TK = "lau_token";
-export const getToken = () => localStorage.getItem(TK);
-export const setToken = (t) => (t ? localStorage.setItem(TK, t) : localStorage.removeItem(TK));
+export const getToken = () => localStorage.getItem(TK) || sessionStorage.getItem(TK);
+export const setToken = (t, remember = true) => {
+  localStorage.removeItem(TK); sessionStorage.removeItem(TK);
+  if (t) (remember ? localStorage : sessionStorage).setItem(TK, t);
+};
 
 api.interceptors.request.use((cfg) => {
   const t = getToken();

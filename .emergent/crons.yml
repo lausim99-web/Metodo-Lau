@@ -1,9 +1,18 @@
 crons:
-  # 6:00/12:00/18:00 UTC = 8:00/14:00/20:00 in Italia (CEST) — copre mattina, pomeriggio e sera
+  # Ogni ora: promemoria sessioni 24h prima e 1h prima (orario italiano gestito dal backend)
   - name: session-reminders
-    description: "Promemoria email agli atleti che domani hanno una sessione privata con il PT (8, 14 e 20 italiane)"
-    cron: "0 6,12,18 * * *"
+    description: "Promemoria email agli atleti 24 ore e 1 ora prima della sessione privata con il PT"
+    cron: "0 * * * *"
     endpoint: "{{BASE_URL}}/api/cron/session-reminders"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
+
+  # 7:00 UTC = 9:00 Italia: avvisi scadenza schede (6 settimane) a 7 giorni, 1 giorno e il giorno stesso
+  - name: plan-expiry
+    description: "Avvisi email scadenza scheda allenamento / piano alimentare (7gg, 1g, giorno stesso) ad atleta e PT"
+    cron: "0 7 * * *"
+    endpoint: "{{BASE_URL}}/api/cron/plan-expiry"
     method: POST
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     enabled: true

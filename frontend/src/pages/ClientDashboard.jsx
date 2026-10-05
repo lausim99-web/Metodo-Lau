@@ -3,7 +3,7 @@ import AppShell from "../components/AppShell";
 import ContactCard from "../components/ContactCard";
 import { api, API, getToken, formatErr } from "../api";
 import { useAuth } from "../auth";
-import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye, Calendar } from "lucide-react";
+import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye, Calendar, BookOpen, Clock } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
 const TABS = [
@@ -14,30 +14,55 @@ const TABS = [
   { key: "sessions", label: "Sessioni", icon: Calendar },
 ];
 
-function PdfList({ endpoint, kind }) {
+function GuideLink({ url, kind }) {
+  if (!url) return null;
+  return (
+    <a href={url} target="_blank" rel="noreferrer" data-testid={`guide-link-${kind}`}
+       className="flex items-center gap-2 mb-4 text-sm text-yellow-400 hover:text-yellow-300 underline underline-offset-4">
+      <BookOpen size={16} /> Come leggere {kind === "workouts" ? "la scheda di allenamento" : "il piano alimentare"}
+    </a>
+  );
+}
+
+function daysLeft(iso) {
+  if (!iso) return null;
+  return Math.ceil((new Date(iso + "T00:00") - new Date().setHours(0, 0, 0, 0)) / 86400000);
+}
+
+function PdfList({ endpoint, kind, guide }) {
   const [items, setItems] = useState([]);
   const t = getToken();
 
   useEffect(() => { api.get(endpoint).then((r) => setItems(r.data)).catch(() => setItems([])); }, [endpoint]);
 
-  const open = async (f) => {
-    // apre il PDF direttamente in una nuova scheda (Acrobat / lettore PDF del browser)
-    window.open(`${API}/files/${kind}/${f.id}?auth=${encodeURIComponent(t || "")}`, "_blank");
+  const fileUrl = (f, dl) => `${API}/files/${kind}/${f.id}?auth=${encodeURIComponent(t || "")}${dl ? "&download=1" : ""}`;
+  // apre il PDF direttamente in una nuova scheda (Acrobat / lettore PDF del browser)
+  const open = (f) => window.open(fileUrl(f, false), "_blank");
+  const download = (f) => {
+    const a = document.createElement("a");
+    a.href = fileUrl(f, true); a.download = f.filename || "scheda.pdf";
+    document.body.appendChild(a); a.click(); a.remove();
   };
 
   if (!items.length) return (
-    <div className="lau-card p-8 text-center">
-      <FileText className="mx-auto text-yellow-400 mb-3" size={40} />
-      <p className="text-lg text-white font-bold">Nessun file disponibile</p>
-      <p className="text-sm text-zinc-400 mt-2">Il tuo PT non ha ancora caricato nulla.</p>
+    <div>
+      <GuideLink url={guide} kind={kind} />
+      <div className="lau-card p-8 text-center">
+        <FileText className="mx-auto text-yellow-400 mb-3" size={40} />
+        <p className="text-lg text-white font-bold">Nessun file disponibile</p>
+        <p className="text-sm text-zinc-400 mt-2">Il tuo PT non ha ancora caricato nulla.</p>
+      </div>
     </div>
   );
 
   return (
     <div className="space-y-3">
-      {items.map((f, i) => (
+      <GuideLink url={guide} kind={kind} />
+      {items.map((f, i) => {
+        const dl = i === 0 ? daysLeft(f.expires_at) : null;
+        return (
         <div key={f.id} className={`lau-card p-4 lau-in ${i === 0 ? "border-yellow-500/40" : ""}`} data-testid={`me-${kind}-${i}`}>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <FileText className={i === 0 ? "text-yellow-400" : "text-zinc-500"} />
             <div className="flex-1 min-w-0">
               <div className="font-display font-bold text-white uppercase truncate">{f.title || f.filename}</div>
@@ -46,13 +71,24 @@ function PdfList({ endpoint, kind }) {
                 {i === 0 && <span className="ml-2 text-yellow-400">· ATTUALE</span>}
                 {i > 0 && <span className="ml-2 text-zinc-500">· STORICO</span>}
               </div>
+              {dl != null && (
+                <div className={`flex items-center gap-1 text-[10px] uppercase tracking-widest font-mono-num mt-1 ${dl <= 7 ? "text-red-400" : "text-zinc-500"}`} data-testid={`me-${kind}-expiry`}>
+                  <Clock size={10} /> {dl > 0 ? `Scade tra ${dl} giorni` : dl === 0 ? "Scade oggi" : "Scaduta — chiedi l'aggiornamento al PT"}
+                </div>
+              )}
             </div>
-            <button onClick={() => open(f)} className="lau-gold-btn px-3 py-2 rounded text-xs flex items-center gap-1" data-testid={`me-${kind}-open-${i}`}>
-              <Eye size={14} /> Apri
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => open(f)} className="lau-gold-btn px-3 py-2 rounded text-xs flex items-center gap-1" data-testid={`me-${kind}-open-${i}`}>
+                <Eye size={14} /> Apri
+              </button>
+              <button onClick={() => download(f)} title="Scarica (poi apri con Adobe Acrobat)"
+                      className="px-3 py-2 rounded text-xs flex items-center gap-1 border border-[#262633] text-zinc-200 hover:border-yellow-500/60" data-testid={`me-${kind}-download-${i}`}>
+                <Download size={14} /> Scarica
+              </button>
+            </div>
           </div>
         </div>
-      ))}
+      ); })}
     </div>
   );
 }
@@ -224,7 +260,7 @@ function SessionsTab() {
     <div className="lau-card p-8 text-center">
       <Calendar className="mx-auto text-yellow-400 mb-3" size={40} />
       <p className="text-lg text-white font-bold">Nessuna sessione programmata</p>
-      <p className="text-sm text-zinc-400 mt-2">Quando il PT fissa un allenamento privato apparirà qui — e ti arriverà un'email 24 ore prima.</p>
+      <p className="text-sm text-zinc-400 mt-2">Quando il PT fissa un allenamento privato apparirà qui — e ti arriveranno due email: 24 ore prima e 1 ora prima.</p>
     </div>
   );
   const today = new Date().toISOString().slice(0, 10);
@@ -267,6 +303,8 @@ export default function ClientDashboard() {
   const { user } = useAuth();
   const [tab, setTab] = useState("workouts");
   const [badges, setBadges] = useState({ workouts: 0, nutrition: 0 });
+  const [guides, setGuides] = useState({});
+  useEffect(() => { api.get("/contacts").then((r) => setGuides(r.data)).catch(() => {}); }, []);
 
   const loadBadges = async () => {
     try {
@@ -312,8 +350,8 @@ export default function ClientDashboard() {
           );
         })}
       </div>
-      {tab === "workouts" && <PdfList endpoint="/me/workouts" kind="workouts" />}
-      {tab === "nutrition" && <PdfList endpoint="/me/nutrition/list" kind="nutrition" />}
+      {tab === "workouts" && <PdfList endpoint="/me/workouts" kind="workouts" guide={guides.guide_workout} />}
+      {tab === "nutrition" && <PdfList endpoint="/me/nutrition/list" kind="nutrition" guide={guides.guide_nutrition} />}
       {tab === "photos" && <PhotosTab />}
       {tab === "progress" && <ProgressTab />}
       {tab === "sessions" && <SessionsTab />}

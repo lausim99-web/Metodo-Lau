@@ -10,6 +10,7 @@ export default function Login() {
   const nav = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -17,7 +18,7 @@ export default function Login() {
     e.preventDefault();
     setLoading(true); setErr("");
     try {
-      const u = await login(email, password);
+      const u = await login(email, password, remember);
       toast.success(`Benvenuto ${u.name}`);
       nav(u.role === "admin" ? "/admin" : "/");
     } catch (e) {
@@ -61,6 +62,11 @@ export default function Login() {
               className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded-lg px-4 py-3 text-base text-white placeholder:text-zinc-600"
             />
           </div>
+          <label className="flex items-center gap-3 cursor-pointer select-none" data-testid="login-remember-label">
+            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)}
+                   data-testid="login-remember-checkbox" className="w-4 h-4 accent-yellow-400" />
+            <span className="text-sm text-zinc-300">Rimani collegato <span className="text-zinc-500">(30 giorni)</span></span>
+          </label>
           {err && (
             <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2" data-testid="login-error">
               {err}
