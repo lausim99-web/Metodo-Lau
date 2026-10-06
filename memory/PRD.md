@@ -48,6 +48,12 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - Download PDF in PWA standalone: fetch blob + Web Share API (Salva su File / Apri con Acrobat), fallback anchor download
 - Badge notifica tab non più tagliato (padding sul contenitore scroll)
 
+## Implemented (2026-06, fork 2 — round 3)
+- Brand scritto ovunque "METODOLAU" (UI, manifest, email, EMAIL_FROM_NAME)
+- Nome atleta normalizzato in Title Case alla creazione + migrazione one-off allo startup
+- Email di benvenuto include la password provvisoria scelta dal PT (richiesta esplicita utente) con invito a cambiarla dal Profilo
+- Nota contatti PT aggiornata (preview): "Scrivimi per dubbi su scheda di allenamento, alimentazione o check"
+
 ## Backlog (P1)
 - Cambio password lato atleta dopo primo login
 - Storico progressione peso per esercizio (grafico recharts)

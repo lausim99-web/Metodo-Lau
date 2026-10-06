@@ -89,8 +89,8 @@ nutrition_rows = [
     ["Pre-nanna", "Fiocchi di latte + mandorle", "200g / 15g", "200", "Caseina"],
 ]
 
-make_pdf(os.path.join(SCRIPT_DIR, "workout.pdf"), "SCHEDA ALLENAMENTO - MARIO ROSSI", workout_rows, "METODO LAU · Programma di forza e ipertrofia · Giorno A · 10 giugno 2026")
-make_pdf(os.path.join(SCRIPT_DIR, "nutrition.pdf"), "PIANO ALIMENTARE - MARIO ROSSI", nutrition_rows, "METODO LAU · Definizione 2400 kcal · Proteine 180g · Carboidrati 200g · Grassi 60g")
+make_pdf(os.path.join(SCRIPT_DIR, "workout.pdf"), "SCHEDA ALLENAMENTO - MARIO ROSSI", workout_rows, "METODOLAU · Programma di forza e ipertrofia · Giorno A · 10 giugno 2026")
+make_pdf(os.path.join(SCRIPT_DIR, "nutrition.pdf"), "PIANO ALIMENTARE - MARIO ROSSI", nutrition_rows, "METODOLAU · Definizione 2400 kcal · Proteine 180g · Carboidrati 200g · Grassi 60g")
 
 # 3) Upload PDFs (keep existing ones if any)
 existing_w = s.get(f"{BASE}/api/admin/clients/{cid}/workouts").json()

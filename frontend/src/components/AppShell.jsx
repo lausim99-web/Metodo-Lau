@@ -14,7 +14,7 @@ export default function AppShell({ children, title }) {
           <div onClick={() => nav("/")} className="cursor-pointer flex items-center gap-3" data-testid="header-home">
             <Logo size={44} />
             <div className="hidden sm:block">
-              <div className="font-display font-black text-xl tracking-widest uppercase leading-none text-white">METODO LAU</div>
+              <div className="font-display font-black text-xl tracking-widest uppercase leading-none text-white">METODOLAU</div>
               <div className="text-[10px] uppercase tracking-[0.25em] text-yellow-400/80 font-mono-num">
                 {user?.role === "admin" ? "Personal Trainer" : "Atleta"}
               </div>

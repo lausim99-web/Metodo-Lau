@@ -34,7 +34,7 @@ export default function Login() {
         <div className="flex flex-col items-center mb-8">
           <Logo size={112} className="mb-4" />
           <h1 className="font-display font-black text-4xl sm:text-5xl uppercase tracking-widest text-white">
-            Metodo <span className="text-yellow-400">LAU</span>
+            Metodo<span className="text-yellow-400">LAU</span>
           </h1>
           <p className="text-xs uppercase tracking-[0.35em] text-yellow-400/80 font-mono-num mt-2">
             Forgia il tuo corpo · Forgia la tua mente

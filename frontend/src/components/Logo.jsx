@@ -9,7 +9,7 @@ export default function Logo({ size = 44, className = "" }) {
       style={{ width: size, height: size }}
       data-testid="lau-logo"
     >
-      <img src={LOGO} alt="METODO LAU" />
+      <img src={LOGO} alt="METODOLAU" />
     </div>
   );
 }

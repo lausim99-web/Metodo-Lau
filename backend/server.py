@@ -38,7 +38,7 @@ APP_NAME = os.environ.get("APP_NAME", "metodolau")
 APP_URL = os.environ.get("APP_URL", "https://lau-connect.preview.emergentagent.com").rstrip("/")
 EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY")
-EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "METODO LAU")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "METODOLAU")
 EMAIL_REPLY_TO = os.environ.get("EMAIL_REPLY_TO")
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
 WEBHOOK_CRON_SECRET = os.environ.get("WEBHOOK_CRON_SECRET")
@@ -204,12 +204,12 @@ async def notify_client_upload(client_id: str, kind_label: str, title: str):
             '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
             '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
             'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
-            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODO LAU</div>'
+            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODOLAU</div>'
             f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">Nuova {label} disponibile</h1>'
             f'<p style="color:#e4e4e7;font-size:17px;line-height:1.7;margin:0 0 16px">Ciao {name}, il tuo Personal Trainer ha appena caricato '
             f'una nuova <strong style="color:#F5C518">{label}</strong>' + (f' &mdash; <em>{doc_title}</em>' if doc_title else '') + '.</p>'
             f'<a href="{APP_URL}" style="display:inline-block;background:#F5C518;color:#0A0A0D;font-weight:bold;font-size:14px;'
-            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app METODO LAU</a>'
+            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app METODOLAU</a>'
             f'<p style="color:#52525b;font-size:12px;margin:24px 0 0">Inviata da {escape(EMAIL_FROM_NAME)}. Non chiediamo mai password o dati di pagamento via email.</p>'
             '</td></tr></table></td></tr></table>'
         )
@@ -217,22 +217,31 @@ async def notify_client_upload(client_id: str, kind_label: str, title: str):
     except Exception as e:
         logger.error(f"notify_client_upload failed: {e}")
 
-async def send_welcome_email(email: str, name: str):
-    """Welcome email when PT creates a new client. Never includes the password (G2) —
-    the PT shares credentials personally."""
+def _title_name(name: str) -> str:
+    return " ".join(w[:1].upper() + w[1:] for w in name.strip().split())
+
+async def send_welcome_email(email: str, name: str, temp_password: str = ""):
+    """Welcome email when PT creates a new client, with the temporary password chosen by the PT."""
     try:
         subject = f"Benvenuto in {EMAIL_FROM_NAME}"
+        pw_block = (
+            f'<p style="{BODY};margin:0 0 16px">Accedi con la tua email (<strong style="color:#fff">{escape(email)}</strong>) '
+            f'e la password provvisoria: <strong style="color:#F5C518;font-size:20px;letter-spacing:2px">{escape(temp_password)}</strong><br>'
+            'Al primo accesso cambiala dal tuo Profilo.</p>'
+        ) if temp_password else (
+            f'<p style="{BODY};margin:0 0 16px">Accedi con la tua email (<strong style="color:#fff">{escape(email)}</strong>) '
+            'e la password che il tuo PT ti ha comunicato personalmente.</p>'
+        )
         html = (
             '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
             '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
             'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
-            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODO LAU</div>'
+            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODOLAU</div>'
             f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">Benvenuto, {escape(name)}</h1>'
-            '<p style="color:#e4e4e7;font-size:17px;line-height:1.7;margin:0 0 8px">Il tuo Personal Trainer ha creato il tuo account METODO LAU.</p>'
-            f'<p style="color:#e4e4e7;font-size:17px;line-height:1.7;margin:0 0 16px">Accedi con la tua email (<strong style="color:#fff">{escape(email)}</strong>) '
-            'e la password che il tuo PT ti ha comunicato personalmente.</p>'
+            '<p style="color:#e4e4e7;font-size:17px;line-height:1.7;margin:0 0 8px">Il tuo Personal Trainer ha creato il tuo account METODOLAU.</p>'
+            + pw_block +
             f'<a href="{APP_URL}" style="display:inline-block;background:#F5C518;color:#0A0A0D;font-weight:bold;font-size:14px;'
-            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app METODO LAU</a>'
+            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app METODOLAU</a>'
             '<p style="color:#d4d4d8;font-size:16px;line-height:1.7;margin:20px 0 0">Dentro trovi la tua scheda di allenamento, il piano alimentare, '
             'le foto dei progressi e le tue rilevazioni.</p>'
             f'<p style="color:#52525b;font-size:12px;margin:24px 0 0">Inviata da {escape(EMAIL_FROM_NAME)}. Non chiediamo mai password o dati di pagamento via email.</p>'
@@ -433,12 +442,13 @@ async def create_client(body: CreateClientIn, _: dict = Depends(require_admin)):
     email = body.email.lower().strip()
     if await db.users.find_one({"email": email}):
         raise HTTPException(400, "Email già registrata")
+    name = _title_name(body.name)
     doc = {"email": email, "password_hash": hash_password(body.password),
-           "name": body.name, "role": "client",
+           "name": name, "role": "client",
            "created_at": datetime.now(timezone.utc).isoformat()}
     r = await db.users.insert_one(doc)
-    asyncio.create_task(send_welcome_email(email, body.name))
-    return {"id": str(r.inserted_id), "email": email, "name": body.name, "role": "client"}
+    asyncio.create_task(send_welcome_email(email, name, body.password))
+    return {"id": str(r.inserted_id), "email": email, "name": name, "role": "client"}
 
 @api.get("/admin/clients")
 async def list_clients(_: dict = Depends(require_admin)):
@@ -904,7 +914,7 @@ async def send_session_reminder(client: dict, s: dict, stage: str = "24h"):
             '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
             '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
             'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
-            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODO LAU</div>'
+            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODOLAU</div>'
             f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">{headline}</h1>'
             f'<p style="color:#e4e4e7;font-size:17px;line-height:1.7;margin:0 0 8px">Ciao {escape(client.get("name") or "Atleta")}, '
             f'ti ricordiamo che {when} hai la sessione privata con il tuo Personal Trainer:</p>'
@@ -993,13 +1003,13 @@ async def send_expiry_email(client: dict, kind_label: str, title: str, days_left
             '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
             '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
             'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
-            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODO LAU</div>'
+            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODOLAU</div>'
             f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">{head}</h1>'
             f'<p style="{BODY};margin:0 0 16px">Ciao {name}, la tua <strong style="color:#F5C518">{label}</strong>'
             + (f' <em>{escape(title)}</em>' if title else '') + f' {when}: sono passate 6 settimane. '
             'È il momento di aggiornarla con il tuo Personal Trainer per continuare a progredire.</p>'
             f'<a href="{APP_URL}" style="display:inline-block;background:#F5C518;color:#0A0A0D;font-weight:bold;font-size:14px;'
-            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app METODO LAU</a>'
+            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app METODOLAU</a>'
             f'<p style="color:#52525b;font-size:12px;margin:24px 0 0">Inviata da {escape(EMAIL_FROM_NAME)}. Non chiediamo mai password o dati di pagamento via email.</p>'
             '</td></tr></table></td></tr></table>'
         )
@@ -1057,7 +1067,7 @@ async def _process_plan_expiry(run_id: str):
 # ---------- Root ----------
 @api.get("/")
 async def root():
-    return {"app": "METODO LAU", "status": "ok"}
+    return {"app": "METODOLAU", "status": "ok"}
 
 app.include_router(api)
 
@@ -1089,6 +1099,11 @@ async def startup():
     await db.progress.create_index([("user_id", 1), ("date", -1)])
     await db.sessions.create_index([("user_id", 1), ("date", 1)])
     await db.cron_runs.create_index("run_id", unique=True)
+    # normalize existing client names to Title Case (one-off, idempotent)
+    async for u in db.users.find({"role": "client"}, {"name": 1}):
+        fixed = _title_name(u.get("name") or "")
+        if fixed and fixed != u.get("name"):
+            await db.users.update_one({"_id": u["_id"]}, {"$set": {"name": fixed}})
     existing = await db.users.find_one({"email": ADMIN_EMAIL})
     if not existing:
         await db.users.insert_one({

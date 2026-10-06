@@ -99,7 +99,7 @@ export default function AdminDashboard() {
     setBusy(true);
     try {
       await api.post("/admin/clients", form);
-      toast.success("Cliente creato — condividi email e password");
+      toast.success("Atleta creato — riceverà via email la password provvisoria");
       setForm({ name: "", email: "", password: "" });
       setShowAdd(false);
       load();
@@ -135,7 +135,7 @@ export default function AdminDashboard() {
 
       {showAdd && (
         <form onSubmit={add} className="lau-card p-4 sm:p-6 mb-6 grid gap-3 sm:grid-cols-3 lau-in">
-          <input required placeholder="Nome completo" value={form.name}
+          <input required placeholder="Nome e Cognome" value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             data-testid="new-client-name"
             className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-3 text-sm text-white" />
@@ -144,7 +144,7 @@ export default function AdminDashboard() {
             data-testid="new-client-email"
             className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-3 text-sm text-white" />
           <div className="flex gap-2">
-            <input required placeholder="Password iniziale" value={form.password}
+            <input required placeholder="Password provvisoria (es. 1234)" value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               data-testid="new-client-password"
               className="flex-1 bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-3 text-sm text-white" />
