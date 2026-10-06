@@ -3,6 +3,7 @@ import AppShell from "../components/AppShell";
 import ContactCard from "../components/ContactCard";
 import { api, API, getToken, formatErr } from "../api";
 import { useAuth } from "../auth";
+import { toast } from "sonner";
 import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye, Calendar, BookOpen, Clock } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
@@ -38,10 +39,26 @@ function PdfList({ endpoint, kind, guide }) {
   const fileUrl = (f, dl) => `${API}/files/${kind}/${f.id}?auth=${encodeURIComponent(t || "")}${dl ? "&download=1" : ""}`;
   // apre il PDF direttamente in una nuova scheda (Acrobat / lettore PDF del browser)
   const open = (f) => window.open(fileUrl(f, false), "_blank");
-  const download = (f) => {
-    const a = document.createElement("a");
-    a.href = fileUrl(f, true); a.download = f.filename || "scheda.pdf";
-    document.body.appendChild(a); a.click(); a.remove();
+  const download = async (f) => {
+    const name = f.filename || "scheda.pdf";
+    try {
+      const r = await fetch(fileUrl(f, true), { credentials: "include", headers: t ? { Authorization: `Bearer ${t}` } : {} });
+      if (!r.ok) throw new Error("download");
+      const blob = await r.blob();
+      const file = new File([blob], name, { type: "application/pdf" });
+      // In modalità app installata (PWA) il download classico non funziona: usa la condivisione nativa
+      // (Salva su File / Apri con Acrobat)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: name }); return; } catch (e) { if (e.name === "AbortError") return; }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch {
+      toast.error("Download non riuscito, riprova");
+    }
   };
 
   if (!items.length) return (
@@ -331,7 +348,7 @@ export default function ClientDashboard() {
 
   return (
     <AppShell title={`Ciao, ${user?.name?.split(" ")[0] || "Atleta"}`}>
-      <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar" data-testid="main-tabs">
+      <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pt-2 -mt-2 px-2 -mx-2" data-testid="main-tabs">
         {TABS.map((t) => {
           const Icon = t.icon; const active = tab === t.key;
           const count = badges[t.key] || 0;

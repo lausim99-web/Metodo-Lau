@@ -316,6 +316,10 @@ class ChangePwIn(BaseModel):
     current_password: str
     new_password: str
 
+class ChangeEmailIn(BaseModel):
+    new_email: EmailStr
+    password: str
+
 class ExerciseIn(BaseModel):
     name: str
     muscle_group: Optional[str] = ""
@@ -411,6 +415,17 @@ async def change_my_password(body: ChangePwIn, user: dict = Depends(get_current_
     await db.users.update_one({"_id": ObjectId(user["id"])},
                               {"$set": {"password_hash": hash_password(body.new_password)}})
     return {"ok": True}
+
+@api.post("/me/email")
+async def change_my_email(body: ChangeEmailIn, user: dict = Depends(get_current_user)):
+    new_email = body.new_email.lower().strip()
+    doc = await db.users.find_one({"_id": ObjectId(user["id"])})
+    if not doc or not verify_password(body.password, doc["password_hash"]):
+        raise HTTPException(400, "Password non corretta")
+    if await db.users.find_one({"email": new_email, "_id": {"$ne": doc["_id"]}}):
+        raise HTTPException(400, "Email già registrata")
+    await db.users.update_one({"_id": doc["_id"]}, {"$set": {"email": new_email}})
+    return {"ok": True, "email": new_email}
 
 # ---------- Admin: clients ----------
 @api.post("/admin/clients")

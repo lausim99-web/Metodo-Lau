@@ -43,6 +43,11 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - Font corpo email aumentato a 17px
 - Testing: iterazione 4 100% pass
 
+## Implemented (2026-06, fork 2 — round 2)
+- Secondo admin admin2@metodolau.it / Metodolau2; Profilo → Cambia Email (POST /api/me/email con conferma password)
+- Download PDF in PWA standalone: fetch blob + Web Share API (Salva su File / Apri con Acrobat), fallback anchor download
+- Badge notifica tab non più tagliato (padding sul contenitore scroll)
+
 ## Backlog (P1)
 - Cambio password lato atleta dopo primo login
 - Storico progressione peso per esercizio (grafico recharts)

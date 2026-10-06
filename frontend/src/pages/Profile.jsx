@@ -3,12 +3,26 @@ import AppShell from "../components/AppShell";
 import { useAuth } from "../auth";
 import { api, formatErr } from "../api";
 import { toast } from "sonner";
-import { KeyRound, User } from "lucide-react";
+import { KeyRound, User, Mail } from "lucide-react";
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const [f, setF] = useState({ current_password: "", new_password: "", confirm: "" });
+  const [em, setEm] = useState({ new_email: "", password: "" });
   const [busy, setBusy] = useState(false);
+  const [busyEm, setBusyEm] = useState(false);
+
+  const submitEmail = async (e) => {
+    e.preventDefault();
+    setBusyEm(true);
+    try {
+      const r = await api.post("/me/email", em);
+      setUser({ ...user, email: r.data.email });
+      toast.success("Email aggiornata — usala al prossimo accesso");
+      setEm({ new_email: "", password: "" });
+    } catch (e) { toast.error(formatErr(e)); }
+    setBusyEm(false);
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -59,6 +73,26 @@ export default function Profile() {
           ))}
           <button disabled={busy} data-testid="pwd-submit" className="lau-gold-btn w-full py-3 rounded-lg">
             {busy ? "Aggiorno..." : "Aggiorna Password"}
+          </button>
+        </form>
+
+        <form onSubmit={submitEmail} className="lau-card p-5 space-y-4">
+          <div className="flex items-center gap-2 text-yellow-400">
+            <Mail size={18} />
+            <h2 className="font-display font-bold uppercase tracking-wider text-white">Cambia Email</h2>
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-widest text-zinc-400 font-mono-num block mb-2">Nuova email</label>
+            <input type="email" required value={em.new_email} onChange={(e) => setEm({ ...em, new_email: e.target.value })}
+                   data-testid="email-new" className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded-lg px-4 py-3 text-base text-white" />
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-widest text-zinc-400 font-mono-num block mb-2">Password attuale (conferma)</label>
+            <input type="password" required value={em.password} onChange={(e) => setEm({ ...em, password: e.target.value })}
+                   data-testid="email-password" className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded-lg px-4 py-3 text-base text-white" />
+          </div>
+          <button disabled={busyEm} data-testid="email-submit" className="lau-gold-btn w-full py-3 rounded-lg">
+            {busyEm ? "Aggiorno..." : "Aggiorna Email"}
           </button>
         </form>
       </div>
