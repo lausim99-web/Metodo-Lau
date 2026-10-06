@@ -403,7 +403,8 @@ async def login(body: LoginIn, response: Response):
     days = 30 if body.remember else 1
     token = create_access_token(str(user["_id"]), email, user["role"], days)
     set_auth_cookie(response, token, days if body.remember else None)
-    return {"id": str(user["_id"]), "email": email, "name": user["name"], "role": user["role"], "token": token}
+    return {"id": str(user["_id"]), "email": email, "name": user["name"], "role": user["role"], "token": token,
+            "must_change_password": bool(user.get("must_change_password"))}
 
 @api.post("/auth/logout")
 async def logout(response: Response):
@@ -422,7 +423,7 @@ async def change_my_password(body: ChangePwIn, user: dict = Depends(get_current_
     if not doc or not verify_password(body.current_password, doc["password_hash"]):
         raise HTTPException(400, "Password attuale non corretta")
     await db.users.update_one({"_id": ObjectId(user["id"])},
-                              {"$set": {"password_hash": hash_password(body.new_password)}})
+                              {"$set": {"password_hash": hash_password(body.new_password), "must_change_password": False}})
     return {"ok": True}
 
 @api.post("/me/email")
@@ -444,7 +445,7 @@ async def create_client(body: CreateClientIn, _: dict = Depends(require_admin)):
         raise HTTPException(400, "Email già registrata")
     name = _title_name(body.name)
     doc = {"email": email, "password_hash": hash_password(body.password),
-           "name": name, "role": "client",
+           "name": name, "role": "client", "must_change_password": True,
            "created_at": datetime.now(timezone.utc).isoformat()}
     r = await db.users.insert_one(doc)
     asyncio.create_task(send_welcome_email(email, name, body.password))
@@ -488,7 +489,7 @@ async def delete_client(client_id: str, _: dict = Depends(require_admin)):
 @api.put("/admin/clients/{client_id}/password")
 async def reset_pw(client_id: str, body: ResetPwIn, _: dict = Depends(require_admin)):
     r = await db.users.update_one({"_id": ObjectId(client_id), "role": "client"},
-                                  {"$set": {"password_hash": hash_password(body.password)}})
+                                  {"$set": {"password_hash": hash_password(body.password), "must_change_password": True}})
     if r.matched_count == 0:
         raise HTTPException(404, "Cliente non trovato")
     return {"ok": True}

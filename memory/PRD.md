@@ -54,8 +54,12 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - Email di benvenuto include la password provvisoria scelta dal PT (richiesta esplicita utente) con invito a cambiarla dal Profilo
 - Nota contatti PT aggiornata (preview): "Scrivimi per dubbi su scheda di allenamento, alimentazione o check"
 
+## Implemented (2026-06, fork 2 — round 4)
+- Cambio password obbligatorio al primo accesso: flag `must_change_password` (set su creazione atleta e reset PT, azzerato da POST /me/password); pagina ForcePassword.jsx bloccante in App.js
+- Fix overflow pulsante Carica PDF su mobile (ClientDetail)
+- EMAIL_REPLY_TO → davidevr78@libero.it (il mittente tecnico resta il dominio gestito Emergent/Resend; il nome visualizzato è METODOLAU)
+
 ## Backlog (P1)
-- Cambio password lato atleta dopo primo login
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template
 - Note PT sul cliente + calendario scadenza scheda (8 settimane)

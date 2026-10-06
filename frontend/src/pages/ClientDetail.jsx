@@ -84,11 +84,11 @@ function PdfUploadSection({ clientId, kind, label }) {
           <div className="font-display font-bold text-lg uppercase text-white">{label}</div>
           <div className="text-xs text-zinc-400">Le versioni precedenti restano nello storico.</div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <input placeholder="Titolo (opz. es. Scheda A)" value={title} onChange={(e) => setTitle(e.target.value)}
                  data-testid={`${kind}-title`}
-                 className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white w-56" />
-          <label className={`lau-gold-btn px-4 py-2 rounded text-sm cursor-pointer flex items-center gap-2 ${busy ? "opacity-50 pointer-events-none" : ""}`} data-testid={`${kind}-upload-btn`}>
+                 className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white flex-1 min-w-0 sm:w-56" />
+          <label className={`lau-gold-btn px-4 py-2 rounded text-sm cursor-pointer flex items-center gap-2 shrink-0 whitespace-nowrap ${busy ? "opacity-50 pointer-events-none" : ""}`} data-testid={`${kind}-upload-btn`}>
             <Upload size={16} /> {busy ? "..." : "Carica PDF"}
             <input type="file" accept="application/pdf" onChange={upload} className="hidden" data-testid={`${kind}-upload-input`} />
           </label>

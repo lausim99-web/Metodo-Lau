@@ -7,6 +7,7 @@ import ClientDashboard from "./pages/ClientDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import ClientDetail from "./pages/ClientDetail";
 import Profile from "./pages/Profile";
+import ForcePassword from "./pages/ForcePassword";
 
 function LoadingScreen() {
   return (
@@ -21,6 +22,7 @@ function Protected({ role, children }) {
   if (user === null) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   if (role && user.role !== role) return <Navigate to={user.role === "admin" ? "/admin" : "/"} replace />;
+  if (user.must_change_password) return <ForcePassword />;
   return children;
 }
 
@@ -28,6 +30,7 @@ function RootRedirect() {
   const { user } = useAuth();
   if (user === null) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.must_change_password) return <ForcePassword />;
   return user.role === "admin" ? <Navigate to="/admin" replace /> : <ClientDashboard />;
 }
 
