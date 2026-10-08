@@ -59,6 +59,11 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - Fix overflow pulsante Carica PDF su mobile (ClientDetail)
 - EMAIL_REPLY_TO → davidevr78@libero.it (il mittente tecnico resta il dominio gestito Emergent/Resend; il nome visualizzato è METODOLAU)
 
+## Implemented (2026-06, fork 2 — round 5)
+- Email feedback a 3 settimane dalla scheda allenamento (immagine /email/feedback.jpg + testo + pulsante WhatsApp wa.me/PT_WHATSAPP), inviata dal cron giornaliero plan-expiry (flag `feedback_sent` sul workout corrente); invio manuale POST /api/admin/clients/{id}/feedback-email + pulsante 'Invia email feedback' in ClientDetail
+- Env: PT_WHATSAPP=393923897010
+- NOTA: durante il test l'invio ha restituito 402 'Insufficient credits' (credito Emergent per email esaurito): l'utente deve ricaricare
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template

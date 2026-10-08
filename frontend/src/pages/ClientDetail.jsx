@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { api, formatErr, API, getToken } from "../api";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart } from "lucide-react";
 
 const TABS = [
   { key: "workouts", label: "Schede Allenamento", icon: Dumbbell },
@@ -385,6 +385,15 @@ export default function ClientDetail() {
   const nav = useNavigate();
   const [client, setClient] = useState(null);
   const [tab, setTab] = useState("workouts");
+  const [sendingFb, setSendingFb] = useState(false);
+
+  const sendFeedback = async () => {
+    if (!window.confirm(`Inviare ora a ${client.name} l'email di feedback con il pulsante WhatsApp?`)) return;
+    setSendingFb(true);
+    try { await api.post(`/admin/clients/${id}/feedback-email`); toast.success("Email di feedback inviata"); }
+    catch (e) { toast.error(formatErr(e)); }
+    setSendingFb(false);
+  };
 
   useEffect(() => { api.get(`/admin/clients/${id}`).then((r) => setClient(r.data)).catch((e) => toast.error(formatErr(e))); }, [id]);
 
@@ -395,10 +404,17 @@ export default function ClientDetail() {
       <button onClick={() => nav("/admin")} className="flex items-center gap-2 text-sm text-zinc-400 hover:text-yellow-400 mb-4" data-testid="back-to-admin">
         <ArrowLeft size={16} /> Torna agli atleti
       </button>
-      <div className="mb-6">
-        <div className="text-[10px] uppercase tracking-[0.35em] text-yellow-400 font-mono-num">Atleta</div>
-        <h1 className="font-display font-black text-3xl sm:text-4xl uppercase text-white">{client.name}</h1>
-        <div className="text-sm text-zinc-400">{client.email}</div>
+      <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.35em] text-yellow-400 font-mono-num">Atleta</div>
+          <h1 className="font-display font-black text-3xl sm:text-4xl uppercase text-white">{client.name}</h1>
+          <div className="text-sm text-zinc-400">{client.email}</div>
+        </div>
+        <button onClick={sendFeedback} disabled={sendingFb} data-testid="send-feedback-email-btn"
+                title="Invia ora l'email 'Come sta andando il programma?' (quella automatica parte dopo 3 settimane)"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-display font-bold uppercase tracking-wider border border-[#262633] text-zinc-200 hover:border-yellow-500/60 disabled:opacity-50">
+          <MessageSquareHeart size={16} className="text-yellow-400" /> {sendingFb ? "Invio..." : "Invia email feedback"}
+        </button>
       </div>
 
       <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar">

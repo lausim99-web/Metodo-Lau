@@ -17,7 +17,7 @@ import jwt as pyjwt
 import requests as http_requests
 from html import escape
 from html.parser import HTMLParser
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from typing import List, Optional, Any
@@ -46,6 +46,8 @@ STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https
 STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
 ROME = ZoneInfo("Europe/Rome")
 PLAN_DURATION_DAYS = 42  # 6 settimane
+FEEDBACK_AFTER_DAYS = 21  # 3 settimane
+PT_WHATSAPP = os.environ.get("PT_WHATSAPP", "")
 EXPIRY_STAGES = {7: "7d", 1: "1d", 0: "0d"}
 BODY = "color:#e4e4e7;font-size:17px;line-height:1.7"
 
@@ -1040,8 +1042,47 @@ async def cron_plan_expiry(request: Request):
     asyncio.create_task(_process_plan_expiry(run_id))
     return {"ok": True, "run_id": run_id}
 
+# ---------- Email feedback a 3 settimane ----------
+async def send_feedback_email(client: dict) -> bool:
+    try:
+        name = escape((client.get("name") or "Atleta").split(" ")[0])
+        wa_text = quote(f"Ciao! Sono {client.get('name') or ''}, ti scrivo per il feedback sulla scheda.")
+        wa_url = f"https://wa.me/{PT_WHATSAPP}?text={wa_text}" if PT_WHATSAPP else APP_URL
+        subject = f"{EMAIL_FROM_NAME}: come sta andando il programma, {name}?"
+        html = (
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
+            '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
+            'style="background:#121218;border:1px solid #262633;border-radius:12px;overflow:hidden;font-family:Arial,sans-serif">'
+            f'<tr><td><img src="{APP_URL}/email/feedback.jpg" alt="Ciao! Come sta andando il programma?" width="560" '
+            'style="display:block;width:100%;max-width:560px;height:auto"></td></tr>'
+            '<tr><td style="padding:28px 32px 32px">'
+            '<div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODOLAU</div>'
+            f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">Ciao {name}!</h1>'
+            f'<p style="{BODY};margin:0 0 12px">Sono passate 3 settimane dall\'inizio della tua scheda di allenamento: come sta andando il programma?</p>'
+            f'<p style="{BODY};margin:0 0 12px">Mi farebbe piacere ricevere il tuo feedback. Se c\'è qualcosa da modificare o da migliorare, '
+            'non farti problemi a scrivermi: sono qui per sistemarlo insieme a te.</p>'
+            f'<a href="{wa_url}" style="display:inline-block;background:#25D366;color:#ffffff;font-weight:bold;font-size:15px;'
+            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:14px 28px;border-radius:8px;margin-top:8px">Scrivimi su WhatsApp</a>'
+            f'<p style="color:#52525b;font-size:12px;margin:24px 0 0">Inviata da {escape(EMAIL_FROM_NAME)}. Non chiediamo mai password o dati di pagamento via email.</p>'
+            '</td></tr></table></td></tr></table>'
+        )
+        return bool(await send_email(to=client["email"], subject=subject, html=html))
+    except Exception as e:
+        logger.error(f"send_feedback_email failed: {e}")
+        return False
+
+@api.post("/admin/clients/{client_id}/feedback-email")
+async def manual_feedback_email(client_id: str, _: dict = Depends(require_admin)):
+    client = await db.users.find_one({"_id": ObjectId(client_id), "role": "client"})
+    if not client:
+        raise HTTPException(404, "Cliente non trovato")
+    if not await send_feedback_email(client):
+        raise HTTPException(400, "Invio email non riuscito (controlla il credito email su Emergent)")
+    return {"ok": True}
+
 async def _process_plan_expiry(run_id: str):
-    """Daily: for each athlete's CURRENT workout/nutrition PDF, email at 7d, 1d and 0d before expiry."""
+    """Daily: for each athlete's CURRENT workout/nutrition PDF, email at 7d, 1d and 0d before expiry.
+    Also sends the 3-week feedback email for the current workout."""
     try:
         today = datetime.now(ROME).date()
         sent = 0
@@ -1051,6 +1092,11 @@ async def _process_plan_expiry(run_id: str):
                 latest.setdefault(f["user_id"], f)
             for uid, f in latest.items():
                 days_left = (datetime.fromisoformat(_expiry_of(f)).date() - today).days
+                if coll is db.workouts and days_left <= PLAN_DURATION_DAYS - FEEDBACK_AFTER_DAYS and not f.get("feedback_sent"):
+                    client = await db.users.find_one({"_id": ObjectId(uid)})
+                    if client and await send_feedback_email(client):
+                        await coll.update_one({"id": f["id"]}, {"$set": {"feedback_sent": True}})
+                        sent += 1
                 stage = EXPIRY_STAGES.get(days_left)
                 if not stage or stage in (f.get("expiry_notified") or []):
                     continue
