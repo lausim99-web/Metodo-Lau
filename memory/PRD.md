@@ -64,6 +64,10 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - Env: PT_WHATSAPP=393923897010
 - NOTA: durante il test l'invio ha restituito 402 'Insufficient credits' (credito Emergent per email esaurito): l'utente deve ricaricare
 
+## Implemented (2026-06, fork 2 — round 6)
+- Scadenza schede: default 8 settimane; tendina 1–12 settimane o data personalizzata al caricamento (form `weeks` / `expires_at`); data modificabile sul file attuale (PATCH /api/admin/{workouts|nutrition}/{id}/expiry, resetta expiry_notified)
+- Email feedback ora basata su 21 giorni dall'upload (indipendente dalla durata)
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template

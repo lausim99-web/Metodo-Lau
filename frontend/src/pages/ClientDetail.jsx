@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { api, formatErr, API, getToken } from "../api";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart, Clock } from "lucide-react";
 
 const TABS = [
   { key: "workouts", label: "Schede Allenamento", icon: Dumbbell },
@@ -13,12 +13,12 @@ const TABS = [
   { key: "sessions", label: "Sessioni PT", icon: Calendar },
 ];
 
-function FileList({ items, kind, onDelete, viewToken }) {
+function FileList({ items, kind, onDelete, onExpiry, viewToken }) {
   if (!items.length) return <div className="text-zinc-500 text-sm py-4 text-center">Nessun file caricato ancora.</div>;
   return (
     <ul className="space-y-2">
       {items.map((f, i) => (
-        <li key={f.id} className="flex items-center gap-3 p-3 bg-[#0A0A0D] border border-[#262633] rounded-lg" data-testid={`${kind}-item-${i}`}>
+        <li key={f.id} className="flex items-center gap-3 p-3 bg-[#0A0A0D] border border-[#262633] rounded-lg flex-wrap" data-testid={`${kind}-item-${i}`}>
           <FileText className="text-yellow-400 shrink-0" size={18} />
           <div className="flex-1 min-w-0">
             <div className="text-sm text-white truncate">{f.title || f.filename}</div>
@@ -26,6 +26,14 @@ function FileList({ items, kind, onDelete, viewToken }) {
               {new Date(f.uploaded_at).toLocaleDateString("it-IT")} · {(f.size / 1024).toFixed(0)} KB
               {i === 0 && <span className="ml-2 text-yellow-400">· ATTUALE</span>}
             </div>
+            {i === 0 && f.expires_at && (
+              <label className="flex items-center gap-2 mt-1.5 text-[10px] uppercase tracking-widest text-zinc-400 font-mono-num">
+                <Clock size={11} className="text-yellow-400" /> Scade il
+                <input type="date" defaultValue={f.expires_at} onChange={(e) => e.target.value && onExpiry(f.id, e.target.value)}
+                       data-testid={`${kind}-expiry-date`}
+                       className="bg-transparent border border-[#262633] focus:border-yellow-500 outline-none rounded px-2 py-0.5 text-xs text-white [color-scheme:dark]" />
+              </label>
+            )}
           </div>
           <a href={`${API}/files/${kind}/${f.id}?auth=${encodeURIComponent(viewToken || "")}`} target="_blank" rel="noreferrer"
              className="p-2 text-zinc-300 hover:text-yellow-400" title="Apri">
@@ -43,6 +51,8 @@ function FileList({ items, kind, onDelete, viewToken }) {
 function PdfUploadSection({ clientId, kind, label }) {
   const [items, setItems] = useState([]);
   const [title, setTitle] = useState("");
+  const [weeks, setWeeks] = useState("8");
+  const [customDate, setCustomDate] = useState("");
   const [busy, setBusy] = useState(false);
   const t = getToken();
 
@@ -52,13 +62,22 @@ function PdfUploadSection({ clientId, kind, label }) {
   };
   useEffect(() => { load(); }, [clientId]);
 
+  const setExpiry = async (id, date) => {
+    try {
+      await api.patch(kind === "workouts" ? `/admin/workouts/${id}/expiry` : `/admin/nutrition/${id}/expiry`, { expires_at: date });
+      toast.success("Scadenza aggiornata"); load();
+    } catch (e) { toast.error(formatErr(e)); }
+  };
+
   const upload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (weeks === "custom" && !customDate) { toast.error("Scegli la data di scadenza"); e.target.value = ""; return; }
     setBusy(true);
     const fd = new FormData();
     fd.append("file", file);
     fd.append("title", title || "");
+    if (weeks === "custom") fd.append("expires_at", customDate); else fd.append("weeks", weeks);
     try {
       await api.post(kind === "workouts" ? `/admin/clients/${clientId}/workouts` : `/admin/clients/${clientId}/nutrition`, fd, { headers: { "Content-Type": "multipart/form-data" } });
       toast.success(`${label} caricata`);
@@ -84,7 +103,19 @@ function PdfUploadSection({ clientId, kind, label }) {
           <div className="font-display font-bold text-lg uppercase text-white">{label}</div>
           <div className="text-xs text-zinc-400">Le versioni precedenti restano nello storico.</div>
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+          <select value={weeks} onChange={(e) => setWeeks(e.target.value)} data-testid={`${kind}-weeks-select`}
+                  className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-2 py-2 text-sm text-white">
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((w) => (
+              <option key={w} value={w}>Scade tra {w} {w === 1 ? "settimana" : "settimane"}{w === 8 ? " (default)" : ""}</option>
+            ))}
+            <option value="custom">Data personalizzata…</option>
+          </select>
+          {weeks === "custom" && (
+            <input type="date" value={customDate} onChange={(e) => setCustomDate(e.target.value)} data-testid={`${kind}-custom-date`}
+                   min={new Date().toISOString().slice(0, 10)}
+                   className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-2 py-2 text-sm text-white [color-scheme:dark]" />
+          )}
           <input placeholder="Titolo (opz. es. Scheda A)" value={title} onChange={(e) => setTitle(e.target.value)}
                  data-testid={`${kind}-title`}
                  className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white flex-1 min-w-0 sm:w-56" />
@@ -94,7 +125,7 @@ function PdfUploadSection({ clientId, kind, label }) {
           </label>
         </div>
       </div>
-      <FileList items={items} kind={kind} onDelete={del} viewToken={t} />
+      <FileList items={items} kind={kind} onDelete={del} onExpiry={setExpiry} viewToken={t} />
     </div>
   );
 }

@@ -45,7 +45,7 @@ WEBHOOK_CRON_SECRET = os.environ.get("WEBHOOK_CRON_SECRET")
 STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
 STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
 ROME = ZoneInfo("Europe/Rome")
-PLAN_DURATION_DAYS = 42  # 6 settimane
+PLAN_DURATION_DAYS = 56  # 8 settimane (default)
 FEEDBACK_AFTER_DAYS = 21  # 3 settimane
 PT_WHATSAPP = os.environ.get("PT_WHATSAPP", "")
 EXPIRY_STAGES = {7: "7d", 1: "1d", 0: "0d"}
@@ -551,8 +551,32 @@ async def client_logs(client_id: str, _: dict = Depends(require_admin)):
         out.append(l)
     return out
 
-def _expiry_from_now() -> str:
-    return (datetime.now(ROME).date() + timedelta(days=PLAN_DURATION_DAYS)).isoformat()
+def _expiry_from_now(expires_at: str = "", weeks: Optional[int] = None) -> str:
+    if expires_at:
+        try:
+            return datetime.strptime(expires_at.strip(), "%Y-%m-%d").date().isoformat()
+        except ValueError:
+            raise HTTPException(400, "Data di scadenza non valida")
+    days = (weeks * 7) if weeks and 1 <= weeks <= 52 else PLAN_DURATION_DAYS
+    return (datetime.now(ROME).date() + timedelta(days=days)).isoformat()
+
+class ExpiryIn(BaseModel):
+    expires_at: str
+
+async def _set_expiry(collection, file_id: str, body: ExpiryIn):
+    new = _expiry_from_now(body.expires_at)
+    r = await collection.update_one({"id": file_id}, {"$set": {"expires_at": new, "expiry_notified": []}})
+    if r.matched_count == 0:
+        raise HTTPException(404, "File non trovato")
+    return {"ok": True, "expires_at": new}
+
+@api.patch("/admin/workouts/{file_id}/expiry")
+async def set_workout_expiry(file_id: str, body: ExpiryIn, _: dict = Depends(require_admin)):
+    return await _set_expiry(db.workouts, file_id, body)
+
+@api.patch("/admin/nutrition/{file_id}/expiry")
+async def set_nutrition_expiry(file_id: str, body: ExpiryIn, _: dict = Depends(require_admin)):
+    return await _set_expiry(db.nutrition, file_id, body)
 
 def _expiry_of(doc: dict) -> str:
     if doc.get("expires_at"):
@@ -562,7 +586,7 @@ def _expiry_of(doc: dict) -> str:
 
 # ---------- Nutrition PDF ----------
 @api.post("/admin/clients/{client_id}/nutrition")
-async def upload_nutrition(client_id: str, title: str = Form(""), file: UploadFile = File(...), _: dict = Depends(require_admin)):
+async def upload_nutrition(client_id: str, title: str = Form(""), expires_at: str = Form(""), weeks: Optional[int] = Form(None), file: UploadFile = File(...), _: dict = Depends(require_admin)):
     u = await db.users.find_one({"_id": ObjectId(client_id)})
     if not u:
         raise HTTPException(404, "Cliente non trovato")
@@ -577,7 +601,7 @@ async def upload_nutrition(client_id: str, title: str = Form(""), file: UploadFi
            "filename": file.filename, "title": title or file.filename,
            "size": result.get("size", len(data)), "seen": False,
            "uploaded_at": datetime.now(timezone.utc).isoformat(),
-           "expires_at": _expiry_from_now(), "expiry_notified": []}
+           "expires_at": _expiry_from_now(expires_at, weeks), "expiry_notified": []}
     await db.nutrition.insert_one(doc)
     doc.pop("_id", None)
     asyncio.create_task(notify_client_upload(client_id, "piano alimentare", doc["title"]))
@@ -672,7 +696,7 @@ async def admin_nutrition_file(client_id: str, _: dict = Depends(require_admin))
 
 # ---------- Workout PDFs (with history) ----------
 @api.post("/admin/clients/{client_id}/workouts")
-async def upload_workout(client_id: str, title: str = Form(""), file: UploadFile = File(...), _: dict = Depends(require_admin)):
+async def upload_workout(client_id: str, title: str = Form(""), expires_at: str = Form(""), weeks: Optional[int] = Form(None), file: UploadFile = File(...), _: dict = Depends(require_admin)):
     if not (file.content_type or "").startswith("application/pdf") and not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "Solo file PDF sono ammessi")
     data = await file.read()
@@ -684,7 +708,7 @@ async def upload_workout(client_id: str, title: str = Form(""), file: UploadFile
            "filename": file.filename, "title": title or file.filename,
            "size": result.get("size", len(data)), "seen": False,
            "uploaded_at": datetime.now(timezone.utc).isoformat(),
-           "expires_at": _expiry_from_now(), "expiry_notified": []}
+           "expires_at": _expiry_from_now(expires_at, weeks), "expiry_notified": []}
     await db.workouts.insert_one(doc)
     doc.pop("_id", None)
     asyncio.create_task(notify_client_upload(client_id, "scheda di allenamento", doc["title"]))
@@ -990,7 +1014,7 @@ async def _process_session_reminders(run_id: str):
     except Exception as e:
         logger.error(f"_process_session_reminders failed: {e}")
 
-# ---------- Cron: plan expiry (6 settimane) ----------
+# ---------- Cron: plan expiry ----------
 async def send_expiry_email(client: dict, kind_label: str, title: str, days_left: int, pt_email: Optional[str]):
     try:
         name = escape(client.get("name") or "Atleta")
@@ -1009,7 +1033,7 @@ async def send_expiry_email(client: dict, kind_label: str, title: str, days_left
             '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODOLAU</div>'
             f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">{head}</h1>'
             f'<p style="{BODY};margin:0 0 16px">Ciao {name}, la tua <strong style="color:#F5C518">{label}</strong>'
-            + (f' <em>{escape(title)}</em>' if title else '') + f' {when}: sono passate 6 settimane. '
+            + (f' <em>{escape(title)}</em>' if title else '') + f' {when}. '
             'È il momento di aggiornarla con il tuo Personal Trainer per continuare a progredire.</p>'
             f'<a href="{APP_URL}" style="display:inline-block;background:#F5C518;color:#0A0A0D;font-weight:bold;font-size:14px;'
             'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app METODOLAU</a>'
@@ -1092,7 +1116,8 @@ async def _process_plan_expiry(run_id: str):
                 latest.setdefault(f["user_id"], f)
             for uid, f in latest.items():
                 days_left = (datetime.fromisoformat(_expiry_of(f)).date() - today).days
-                if coll is db.workouts and days_left <= PLAN_DURATION_DAYS - FEEDBACK_AFTER_DAYS and not f.get("feedback_sent"):
+                up_date = datetime.fromisoformat(f["uploaded_at"].replace("Z", "+00:00")).astimezone(ROME).date()
+                if coll is db.workouts and (today - up_date).days >= FEEDBACK_AFTER_DAYS and days_left > 0 and not f.get("feedback_sent"):
                     client = await db.users.find_one({"_id": ObjectId(uid)})
                     if client and await send_feedback_email(client):
                         await coll.update_one({"id": f["id"]}, {"$set": {"feedback_sent": True}})
