@@ -68,6 +68,9 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - Scadenza schede: default 8 settimane; tendina 1–12 settimane o data personalizzata al caricamento (form `weeks` / `expires_at`); data modificabile sul file attuale (PATCH /api/admin/{workouts|nutrition}/{id}/expiry, resetta expiry_notified)
 - Email feedback ora basata su 21 giorni dall'upload (indipendente dalla durata)
 
+## Implemented (2026-06, fork 2 — round 7)
+- Email 'scheda scaduta' (giorno 0): immagine /email/expired.jpg + testo promemoria rinnovo + pulsante WhatsApp (PT_WHATSAPP); al PT arriva una notifica breve. Invio manuale POST /api/admin/clients/{id}/expired-email + pulsante 'Email scadenza' in ClientDetail
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template

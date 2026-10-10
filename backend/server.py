@@ -1015,13 +1015,59 @@ async def _process_session_reminders(run_id: str):
         logger.error(f"_process_session_reminders failed: {e}")
 
 # ---------- Cron: plan expiry ----------
+def _wa_url(client: dict, text: str) -> str:
+    return f"https://wa.me/{PT_WHATSAPP}?text={quote(text)}" if PT_WHATSAPP else APP_URL
+
+async def send_expired_email(client: dict) -> bool:
+    """Day-0 email: plan expired, image + renewal text + WhatsApp button."""
+    try:
+        name = escape((client.get("name") or "Atleta").split(" ")[0])
+        wa = _wa_url(client, f"Ciao! Sono {client.get('name') or ''}, confermo che voglio rinnovare la scheda e organizzare il check.")
+        subject = f"{EMAIL_FROM_NAME}: {name}, la tua scheda è scaduta — rinnoviamo?"
+        html = (
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
+            '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
+            'style="background:#121218;border:1px solid #262633;border-radius:12px;overflow:hidden;font-family:Arial,sans-serif">'
+            f'<tr><td><img src="{APP_URL}/email/expired.jpg" alt="Promemoria: scheda scaduta" width="560" '
+            'style="display:block;width:100%;max-width:560px;height:auto"></td></tr>'
+            '<tr><td style="padding:28px 32px 32px">'
+            '<div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODOLAU</div>'
+            f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">Ciao {name}, ti mando questo messaggio come promemoria.</h1>'
+            f'<p style="{BODY};margin:0 0 12px">Mi risulta che dovrebbero essere scaduti i tempi del consiglio alimentare e della scheda di allenamento '
+            '(i quali consiglio sempre di cambiare dopo 8 settimane).</p>'
+            f'<p style="{BODY};margin:0 0 12px">Se sei interessata/o al rinnovo ti prego di mandarmi conferma, in modo da organizzarmi per un check con una misurazione corporea.</p>'
+            f'<p style="{BODY};margin:0 0 16px"><strong style="color:#F5C518">P.S. Sono sempre gratuite.</strong><br>Grazie e buona giornata</p>'
+            f'<a href="{wa}" style="display:inline-block;background:#25D366;color:#ffffff;font-weight:bold;font-size:15px;'
+            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:14px 28px;border-radius:8px">Conferma su WhatsApp</a>'
+            f'<p style="color:#52525b;font-size:12px;margin:24px 0 0">Inviata da {escape(EMAIL_FROM_NAME)}. Non chiediamo mai password o dati di pagamento via email.</p>'
+            '</td></tr></table></td></tr></table>'
+        )
+        return bool(await send_email(to=client["email"], subject=subject, html=html))
+    except Exception as e:
+        logger.error(f"send_expired_email failed: {e}")
+        return False
+
+@api.post("/admin/clients/{client_id}/expired-email")
+async def manual_expired_email(client_id: str, _: dict = Depends(require_admin)):
+    client = await db.users.find_one({"_id": ObjectId(client_id), "role": "client"})
+    if not client:
+        raise HTTPException(404, "Cliente non trovato")
+    if not await send_expired_email(client):
+        raise HTTPException(400, "Invio email non riuscito (controlla il credito email su Emergent)")
+    return {"ok": True}
+
 async def send_expiry_email(client: dict, kind_label: str, title: str, days_left: int, pt_email: Optional[str]):
     try:
         name = escape(client.get("name") or "Atleta")
         label = escape(kind_label)
         if days_left == 0:
-            head, when = f"La tua {label} è scaduta oggi", "scade <strong style=\"color:#F5C518\">oggi</strong>"
-        elif days_left == 1:
+            ok = await send_expired_email(client)
+            if pt_email:
+                await send_email(to=pt_email, subject=f"[PT] {name}: {label} scaduta oggi",
+                                 html=f'<p style="font-family:Arial;font-size:16px">La {label} di <strong>{name}</strong> è scaduta oggi. '
+                                      f'All\'atleta è stata inviata l\'email di promemoria rinnovo con il pulsante WhatsApp.</p>')
+            return ok
+        if days_left == 1:
             head, when = f"La tua {label} scade domani", "scade <strong style=\"color:#F5C518\">domani</strong>"
         else:
             head, when = f"La tua {label} scade tra {days_left} giorni", f"scade tra <strong style=\"color:#F5C518\">{days_left} giorni</strong>"
