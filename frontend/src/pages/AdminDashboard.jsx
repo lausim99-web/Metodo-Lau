@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { api, formatErr } from "../api";
 import { toast } from "sonner";
-import { UserPlus, Users, ArrowRight, Trash2, KeyRound, Instagram, MessageCircle, Phone, Mail, Save, Search, ArrowDownAZ, ArrowUpZA, Clock, Link as LinkIcon } from "lucide-react";
+import { UserPlus, Users, ArrowRight, Trash2, KeyRound, Instagram, MessageCircle, Phone, Mail, Save, Search, ArrowDownAZ, ArrowUpZA, Clock, Link as LinkIcon, Globe } from "lucide-react";
 
 const SORTS = [
   { key: "az", label: "A → Z", icon: ArrowDownAZ },
@@ -12,7 +12,7 @@ const SORTS = [
 ];
 
 function ContactsEditor() {
-  const [f, setF] = useState({ instagram: "", whatsapp: "", phone: "", email: "", note: "", guide_workout: "", guide_nutrition: "" });
+  const [f, setF] = useState({ instagram: "", whatsapp: "", phone: "", email: "", note: "", guide_video: "", website: "" });
   const [busy, setBusy] = useState(false);
   useEffect(() => { api.get("/contacts").then((r) => setF(r.data)).catch(() => {}); }, []);
   const save = async (e) => {
@@ -49,13 +49,13 @@ function ContactsEditor() {
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="flex items-center gap-2 bg-[#0A0A0D] border border-[#262633] rounded px-3">
           <LinkIcon size={14} className="text-yellow-400 shrink-0" />
-          <input placeholder="Link guida: come leggere la scheda di allenamento" value={f.guide_workout || ""} onChange={(e) => setF({ ...f, guide_workout: e.target.value })}
-                 data-testid="contacts-guide-workout" className="flex-1 bg-transparent outline-none py-2 text-sm text-white min-w-0" />
+          <input placeholder="Link video guida: come aprire la scheda alimentare e usare la piattaforma" value={f.guide_video || ""} onChange={(e) => setF({ ...f, guide_video: e.target.value })}
+                 data-testid="contacts-guide-video" className="flex-1 bg-transparent outline-none py-2 text-sm text-white min-w-0" />
         </div>
         <div className="flex items-center gap-2 bg-[#0A0A0D] border border-[#262633] rounded px-3">
-          <LinkIcon size={14} className="text-yellow-400 shrink-0" />
-          <input placeholder="Link guida: come leggere il piano alimentare" value={f.guide_nutrition || ""} onChange={(e) => setF({ ...f, guide_nutrition: e.target.value })}
-                 data-testid="contacts-guide-nutrition" className="flex-1 bg-transparent outline-none py-2 text-sm text-white min-w-0" />
+          <Globe size={14} className="text-yellow-400 shrink-0" />
+          <input placeholder="Sito personale del PT (es. https://www.metodolau.it)" value={f.website || ""} onChange={(e) => setF({ ...f, website: e.target.value })}
+                 data-testid="contacts-website" className="flex-1 bg-transparent outline-none py-2 text-sm text-white min-w-0" />
         </div>
       </div>
       <div className="flex gap-2">

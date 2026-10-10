@@ -380,8 +380,8 @@ class ContactsIn(BaseModel):
     phone: Optional[str] = ""
     email: Optional[str] = ""
     note: Optional[str] = ""
-    guide_workout: Optional[str] = ""
-    guide_nutrition: Optional[str] = ""
+    guide_video: Optional[str] = ""
+    website: Optional[str] = ""
 
 class SessionIn(BaseModel):
     date: str  # YYYY-MM-DD

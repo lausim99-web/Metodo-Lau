@@ -71,6 +71,9 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 ## Implemented (2026-06, fork 2 — round 7)
 - Email 'scheda scaduta' (giorno 0): immagine /email/expired.jpg + testo promemoria rinnovo + pulsante WhatsApp (PT_WHATSAPP); al PT arriva una notifica breve. Invio manuale POST /api/admin/clients/{id}/expired-email + pulsante 'Email scadenza' in ClientDetail
 
+## Implemented (2026-06, fork 2 — round 8)
+- Link PT ridefiniti: `guide_video` (video: come aprire la scheda alimentare e usare la piattaforma — mostrato in entrambi i tab Schede/Alimentazione) e `website` (sito personale del PT — card 'Sito web' nei contatti). Rimossi guide_workout/guide_nutrition
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template

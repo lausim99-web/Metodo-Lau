@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api";
-import { Instagram, MessageCircle, Phone, Mail, Info } from "lucide-react";
+import { Instagram, MessageCircle, Phone, Mail, Info, Globe } from "lucide-react";
 
 export default function ContactCard() {
   const [c, setC] = useState(null);
   useEffect(() => { api.get("/contacts").then((r) => setC(r.data)).catch(() => {}); }, []);
-  if (!c || !(c.instagram || c.whatsapp || c.phone || c.email)) return null;
+  if (!c || !(c.instagram || c.whatsapp || c.phone || c.email || c.website)) return null;
 
+  const site = (u) => (/^https?:\/\//i.test(u) ? u : `https://${u}`);
   const waLink = (n) => `https://wa.me/${String(n).replace(/[^0-9+]/g, "")}`;
   const tel = (n) => `tel:${String(n).replace(/\s/g, "")}`;
   const mailto = (e) => `mailto:${e}`;
@@ -65,6 +66,18 @@ export default function ContactCard() {
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono-num">Email</div>
               <div className="truncate">{c.email}</div>
+            </div>
+          </a>
+        )}
+        {c.website && (
+          <a href={site(c.website)} target="_blank" rel="noreferrer" data-testid="contact-website"
+             className="flex items-center gap-3 p-3 rounded-lg bg-[#0A0A0D] border border-[#262633] hover:border-yellow-500/50 transition text-sm text-white">
+            <div className="w-9 h-9 rounded-full bg-yellow-400/15 border border-yellow-500/40 flex items-center justify-center shrink-0">
+              <Globe size={16} className="text-yellow-400" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono-num">Sito web</div>
+              <div className="truncate">{c.website.replace(/^https?:\/\//i, "")}</div>
             </div>
           </a>
         )}

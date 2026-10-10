@@ -4,7 +4,7 @@ import ContactCard from "../components/ContactCard";
 import { api, API, getToken, formatErr } from "../api";
 import { useAuth } from "../auth";
 import { toast } from "sonner";
-import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye, Calendar, BookOpen, Clock } from "lucide-react";
+import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye, Calendar, PlayCircle, Clock } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
 const TABS = [
@@ -20,7 +20,7 @@ function GuideLink({ url, kind }) {
   return (
     <a href={url} target="_blank" rel="noreferrer" data-testid={`guide-link-${kind}`}
        className="flex items-center gap-2 mb-4 text-sm text-yellow-400 hover:text-yellow-300 underline underline-offset-4">
-      <BookOpen size={16} /> Come leggere {kind === "workouts" ? "la scheda di allenamento" : "il piano alimentare"}
+      <PlayCircle size={16} /> Guarda il video: come aprire la scheda e usare la piattaforma
     </a>
   );
 }
@@ -367,8 +367,8 @@ export default function ClientDashboard() {
           );
         })}
       </div>
-      {tab === "workouts" && <PdfList endpoint="/me/workouts" kind="workouts" guide={guides.guide_workout} />}
-      {tab === "nutrition" && <PdfList endpoint="/me/nutrition/list" kind="nutrition" guide={guides.guide_nutrition} />}
+      {tab === "workouts" && <PdfList endpoint="/me/workouts" kind="workouts" guide={guides.guide_video} />}
+      {tab === "nutrition" && <PdfList endpoint="/me/nutrition/list" kind="nutrition" guide={guides.guide_video} />}
       {tab === "photos" && <PhotosTab />}
       {tab === "progress" && <ProgressTab />}
       {tab === "sessions" && <SessionsTab />}
