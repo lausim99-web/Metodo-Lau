@@ -4,6 +4,7 @@ import ContactCard from "../components/ContactCard";
 import { api, API, getToken, formatErr } from "../api";
 import { useAuth } from "../auth";
 import { toast } from "sonner";
+import PdfViewer from "../components/PdfViewer";
 import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye, Calendar, PlayCircle, Clock } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
@@ -32,13 +33,14 @@ function daysLeft(iso) {
 
 function PdfList({ endpoint, kind, guide }) {
   const [items, setItems] = useState([]);
+  const [viewing, setViewing] = useState(null);
   const t = getToken();
 
   useEffect(() => { api.get(endpoint).then((r) => setItems(r.data)).catch(() => setItems([])); }, [endpoint]);
 
   const fileUrl = (f, dl) => `${API}/files/${kind}/${f.id}?auth=${encodeURIComponent(t || "")}${dl ? "&download=1" : ""}`;
-  // apre il PDF direttamente in una nuova scheda (Acrobat / lettore PDF del browser)
-  const open = (f) => window.open(fileUrl(f, false), "_blank");
+  // apre il PDF dentro l'app (visore integrato con pulsante Chiudi)
+  const open = (f) => setViewing(f);
   const download = async (f) => {
     const name = f.filename || "scheda.pdf";
     try {
@@ -74,6 +76,7 @@ function PdfList({ endpoint, kind, guide }) {
 
   return (
     <div className="space-y-3">
+      {viewing && <PdfViewer url={fileUrl(viewing, false)} title={viewing.title || viewing.filename} onClose={() => setViewing(null)} onDownload={() => download(viewing)} />}
       <GuideLink url={guide} kind={kind} />
       {items.map((f, i) => {
         const dl = i === 0 ? daysLeft(f.expires_at) : null;

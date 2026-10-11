@@ -74,6 +74,9 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 ## Implemented (2026-06, fork 2 — round 8)
 - Link PT ridefiniti: `guide_video` (video: come aprire la scheda alimentare e usare la piattaforma — mostrato in entrambi i tab Schede/Alimentazione) e `website` (sito personale del PT — card 'Sito web' nei contatti). Rimossi guide_workout/guide_nutrition
 
+## Implemented (2026-06, fork 2 — round 9)
+- Visore PDF integrato (react-pdf 9.2.1 + pdfjs-dist 4.8.69, worker copiato in public/pdf.worker.min.mjs) a schermo intero via portal: Chiudi, zoom +/-, Scarica. Il pulsante 'Apri' lato atleta non apre più una nuova scheda (problema PWA senza tasto indietro). NOTA: react-pdf ultima versione richiede Node>=22, usare 9.2.1
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template
