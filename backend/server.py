@@ -368,10 +368,17 @@ class WorkoutLogIn(BaseModel):
 class ProgressIn(BaseModel):
     date: Optional[str] = None  # ISO date
     weight_kg: Optional[float] = None
+    lean_mass_kg: Optional[float] = None
+    fat_mass_kg: Optional[float] = None
     bia_fat: Optional[float] = None
     bia_muscle: Optional[float] = None
     bia_water: Optional[float] = None
     bia_bmi: Optional[float] = None
+    waist_cm: Optional[float] = None
+    hips_cm: Optional[float] = None
+    chest_cm: Optional[float] = None
+    arms_cm: Optional[float] = None
+    legs_cm: Optional[float] = None
     notes: Optional[str] = ""
 
 class ContactsIn(BaseModel):

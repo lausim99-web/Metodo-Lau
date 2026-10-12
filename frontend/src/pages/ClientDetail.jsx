@@ -4,6 +4,7 @@ import AppShell from "../components/AppShell";
 import { api, formatErr, API, getToken } from "../api";
 import { toast } from "sonner";
 import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart, Clock } from "lucide-react";
+import { METRICS, METRIC_KEYS, emptyProgress } from "../metrics";
 
 const TABS = [
   { key: "workouts", label: "Schede Allenamento", icon: Dumbbell },
@@ -222,20 +223,20 @@ function PhotosSection({ clientId }) {
 
 function ProgressSection({ clientId }) {
   const [items, setItems] = useState([]);
-  const [f, setF] = useState({ date: "", weight_kg: "", bia_fat: "", bia_muscle: "", bia_water: "", bia_bmi: "", notes: "" });
+  const [f, setF] = useState(emptyProgress());
   const load = async () => { const r = await api.get(`/admin/clients/${clientId}/progress`); setItems(r.data); };
   useEffect(() => { load(); }, [clientId]);
 
   const add = async (e) => {
     e.preventDefault();
     const body = { ...f };
-    ["weight_kg","bia_fat","bia_muscle","bia_water","bia_bmi"].forEach((k) => {
-      body[k] = body[k] === "" ? null : Number(body[k]);
+    METRIC_KEYS.forEach((k) => {
+      body[k] = body[k] === "" ? null : Number(String(body[k]).replace(",", "."));
     });
     try {
       await api.post(`/admin/clients/${clientId}/progress`, body);
       toast.success("Progresso salvato");
-      setF({ date: "", weight_kg: "", bia_fat: "", bia_muscle: "", bia_water: "", bia_bmi: "", notes: "" });
+      setF(emptyProgress());
       load();
     } catch (e) { toast.error(formatErr(e)); }
   };
@@ -245,27 +246,33 @@ function ProgressSection({ clientId }) {
     try { await api.delete(`/admin/progress/${id}`); load(); } catch (e) { toast.error(formatErr(e)); }
   };
 
-  const Field = ({ k, ph, w = "" }) => (
-    <input placeholder={ph} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })}
-           data-testid={`progress-${k}`}
-           className={`bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white ${w}`} />
-  );
+  const groups = [...new Set(METRICS.map((m) => m.group))];
 
   return (
     <div className="space-y-4">
-      <form onSubmit={add} className="lau-card p-5 space-y-3 lau-in">
-        <div className="font-display font-bold uppercase text-white">Nuova rilevazione</div>
-        <div className="grid gap-2 sm:grid-cols-3 md:grid-cols-6">
+      <form onSubmit={add} className="lau-card p-5 space-y-4 lau-in">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="font-display font-bold uppercase text-white">Nuova rilevazione</div>
           <input type="date" required value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })}
                  data-testid="progress-date"
-                 className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
-          <Field k="weight_kg" ph="Peso kg" />
-          <Field k="bia_fat" ph="Grasso %" />
-          <Field k="bia_muscle" ph="Muscolo %" />
-          <Field k="bia_water" ph="Acqua %" />
-          <Field k="bia_bmi" ph="BMI" />
+                 className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white [color-scheme:dark]" />
         </div>
-        <input placeholder="Note (BIA, misurazioni, sensazioni...)" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })}
+        {groups.map((g) => (
+          <div key={g}>
+            <div className="text-[10px] uppercase tracking-widest text-yellow-400 font-mono-num mb-2">{g}</div>
+            <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-5">
+              {METRICS.filter((m) => m.group === g).map((m) => (
+                <label key={m.k} className="flex items-center gap-2 bg-[#0A0A0D] border border-[#262633] focus-within:border-yellow-500 rounded px-3">
+                  <span className="text-xs text-zinc-400 whitespace-nowrap">{m.label}</span>
+                  <input inputMode="decimal" placeholder={m.unit} value={f[m.k]} onChange={(e) => setF({ ...f, [m.k]: e.target.value })}
+                         data-testid={`progress-${m.k}`}
+                         className="flex-1 min-w-0 bg-transparent outline-none py-2 text-sm text-white text-right font-mono-num" />
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+        <input placeholder="Note / Conclusione (es. Molto bene, mi raccomando le proteine)" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })}
                data-testid="progress-notes"
                className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
         <button type="submit" data-testid="progress-submit" className="lau-gold-btn px-4 py-2 rounded text-sm flex items-center gap-2">
@@ -281,11 +288,7 @@ function ProgressSection({ clientId }) {
             <thead>
               <tr className="text-[10px] uppercase tracking-widest text-yellow-400 font-mono-num border-b border-[#262633]">
                 <th className="text-left py-2 px-2">Data</th>
-                <th className="text-right px-2">Peso</th>
-                <th className="text-right px-2">Grasso</th>
-                <th className="text-right px-2">Muscolo</th>
-                <th className="text-right px-2">Acqua</th>
-                <th className="text-right px-2">BMI</th>
+                {METRICS.map((m) => <th key={m.k} className="text-right px-2 whitespace-nowrap">{m.short}</th>)}
                 <th className="text-left px-2">Note</th>
                 <th></th>
               </tr>
@@ -293,13 +296,9 @@ function ProgressSection({ clientId }) {
             <tbody>
               {items.map((p) => (
                 <tr key={p.id} className="border-b border-[#262633]/50 text-zinc-200" data-testid={`prog-row-${p.id}`}>
-                  <td className="py-2 px-2 font-mono-num">{p.date}</td>
-                  <td className="text-right px-2 font-mono-num">{p.weight_kg ?? "-"}</td>
-                  <td className="text-right px-2 font-mono-num">{p.bia_fat ?? "-"}</td>
-                  <td className="text-right px-2 font-mono-num">{p.bia_muscle ?? "-"}</td>
-                  <td className="text-right px-2 font-mono-num">{p.bia_water ?? "-"}</td>
-                  <td className="text-right px-2 font-mono-num">{p.bia_bmi ?? "-"}</td>
-                  <td className="px-2 text-zinc-400 text-xs">{p.notes}</td>
+                  <td className="py-2 px-2 font-mono-num whitespace-nowrap">{p.date}</td>
+                  {METRICS.map((m) => <td key={m.k} className="text-right px-2 font-mono-num">{p[m.k] ?? "-"}</td>)}
+                  <td className="px-2 text-zinc-400 text-xs min-w-[10rem]">{p.notes}</td>
                   <td><button onClick={() => del(p.id)} className="text-zinc-400 hover:text-red-400 px-2"><Trash2 size={14} /></button></td>
                 </tr>
               ))}

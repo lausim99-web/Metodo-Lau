@@ -77,6 +77,9 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 ## Implemented (2026-06, fork 2 — round 9)
 - Visore PDF integrato (react-pdf 9.2.1 + pdfjs-dist 4.8.69, worker copiato in public/pdf.worker.min.mjs) a schermo intero via portal: Chiudi, zoom +/-, Scarica. Il pulsante 'Apri' lato atleta non apre più una nuova scheda (problema PWA senza tasto indietro). NOTA: react-pdf ultima versione richiede Node>=22, usare 9.2.1
 
+## Implemented (2026-06, fork 2 — round 10)
+- Progressi estesi (Report Plicometria): aggiunti lean_mass_kg, fat_mass_kg, waist_cm, hips_cm, chest_cm, arms_cm, legs_cm. Metriche condivise in frontend/src/metrics.js; form PT raggruppato (Composizione/BIA/Circonferenze); lato atleta card con variazione vs rilevazione precedente, mostrate solo le metriche valorizzate
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template

@@ -5,6 +5,7 @@ import { api, API, getToken, formatErr } from "../api";
 import { useAuth } from "../auth";
 import { toast } from "sonner";
 import PdfViewer from "../components/PdfViewer";
+import { METRICS, delta } from "../metrics";
 import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye, Calendar, PlayCircle, Clock } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
@@ -176,32 +177,30 @@ function ProgressTab() {
     </div>
   );
   const latest = items[0];
-  const METRICS = [
-    { k: "weight_kg", label: "Peso", unit: "kg", color: "#F5C518" },
-    { k: "bia_fat", label: "Grasso", unit: "%", color: "#FF6B6B" },
-    { k: "bia_muscle", label: "Muscolo", unit: "%", color: "#4ADE80" },
-    { k: "bia_water", label: "Acqua", unit: "%", color: "#38BDF8" },
-    { k: "bia_bmi", label: "BMI", unit: "", color: "#C084FC" },
-  ];
-  const activeMetric = METRICS.find((m) => m.k === metric);
+  const prev = items[1];
+  const shown = METRICS.filter((m) => items.some((p) => p[m.k] != null));
+  const activeMetric = METRICS.find((m) => m.k === metric) || shown[0] || METRICS[0];
   // build ascending chronological data for chart, keeping only entries where metric is present
   const chartData = [...items]
     .slice()
     .reverse()
-    .filter((p) => p[metric] != null)
-    .map((p) => ({ date: p.date, value: Number(p[metric]) }));
+    .filter((p) => p[activeMetric.k] != null)
+    .map((p) => ({ date: p.date, value: Number(p[activeMetric.k]) }));
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {METRICS.map((m) => (
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        {(shown.length ? shown : METRICS.slice(0, 1)).map((m) => {
+          const d = delta(latest[m.k], prev?.[m.k]);
+          return (
           <button key={m.k} onClick={() => setMetric(m.k)} data-testid={`metric-${m.k}`}
-                  className={`lau-card p-3 text-center lau-in transition ${metric === m.k ? "border-yellow-500/70" : ""}`}>
+                  className={`lau-card p-3 text-center lau-in transition ${activeMetric.k === m.k ? "border-yellow-500/70" : ""}`}>
             <div className="text-[10px] uppercase tracking-widest font-mono-num" style={{ color: m.color }}>{m.label}</div>
             <div className="font-display font-black text-2xl text-white">
               {latest[m.k] ?? "-"}<span className="text-sm text-zinc-400 ml-1">{latest[m.k] != null ? m.unit : ""}</span>
             </div>
+            {d && <div className="text-[10px] font-mono-num text-zinc-400" data-testid={`metric-delta-${m.k}`}>{d === "=" ? "invariato" : `${d} vs prec.`}</div>}
           </button>
-        ))}
+        ); })}
       </div>
 
       <div className="lau-card p-4" data-testid="progress-chart">
@@ -246,24 +245,16 @@ function ProgressTab() {
           <thead>
             <tr className="text-[10px] uppercase tracking-widest text-yellow-400 font-mono-num border-b border-[#262633]">
               <th className="text-left py-2 px-2">Data</th>
-              <th className="text-right px-2">Peso</th>
-              <th className="text-right px-2">Grasso</th>
-              <th className="text-right px-2">Muscolo</th>
-              <th className="text-right px-2">Acqua</th>
-              <th className="text-right px-2">BMI</th>
+              {shown.map((m) => <th key={m.k} className="text-right px-2 whitespace-nowrap">{m.short}</th>)}
               <th className="text-left px-2">Note</th>
             </tr>
           </thead>
           <tbody>
             {items.map((p) => (
               <tr key={p.id} className="border-b border-[#262633]/50 text-zinc-200">
-                <td className="py-2 px-2 font-mono-num">{p.date}</td>
-                <td className="text-right px-2 font-mono-num">{p.weight_kg ?? "-"}</td>
-                <td className="text-right px-2 font-mono-num">{p.bia_fat ?? "-"}</td>
-                <td className="text-right px-2 font-mono-num">{p.bia_muscle ?? "-"}</td>
-                <td className="text-right px-2 font-mono-num">{p.bia_water ?? "-"}</td>
-                <td className="text-right px-2 font-mono-num">{p.bia_bmi ?? "-"}</td>
-                <td className="px-2 text-zinc-400 text-xs">{p.notes}</td>
+                <td className="py-2 px-2 font-mono-num whitespace-nowrap">{p.date}</td>
+                {shown.map((m) => <td key={m.k} className="text-right px-2 font-mono-num">{p[m.k] ?? "-"}</td>)}
+                <td className="px-2 text-zinc-400 text-xs min-w-[10rem]">{p.notes}</td>
               </tr>
             ))}
           </tbody>
