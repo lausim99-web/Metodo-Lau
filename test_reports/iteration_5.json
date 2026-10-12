@@ -1,0 +1,22 @@
+{
+  "summary": "Iteration 5 (verifica generale after Italian lang bugfix): verified served HTML has <html lang=\"it\" translate=\"no\" class=\"notranslate\">, meta google notranslate, Content-Language it, and manifest.json lang=it. Backend regression: 9/9 pytest tests passed (admin+athlete login, /auth/me, /me/workouts expires_at, /contacts guide_video+website, GET /admin/calendar, PUT invalid ftp->400 + cleanup empty, admin progress CRUD with lean_mass_kg/waist_cm/legs_cm/weight_kg + delete cleanup, file inline vs attachment PDF). Frontend athlete: password eye toggle works (password<->text), 'Rimani collegato (30 giorni)' present, all 5 Italian tabs (Schede/Alimentazione/Foto/Progressi/Sessioni) correct, PdfViewer opens with canvas + close works, Progressi shows metric-bia_water, metric-waist_cm, metric-legs_cm, metric-lean_mass_kg; contact card shows WhatsApp label and Sito web (www.metodolau.it); 0 console errors. Frontend admin: client-search-input, contacts-guide-video, contacts-website, calendar-sync-card/ics-input/save-btn all present; Mario detail page shows admin-tab-progress with progress-weight_kg/lean_mass_kg/waist_cm/legs_cm fields; workouts-weeks-select default='8' with 'custom' option; send-feedback-email-btn and send-expired-email-btn present (NOT clicked per agent note). No horizontal overflow at 390px (body.scrollWidth==clientWidth==390); the inner progress table is correctly wrapped in overflow-x:auto container.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter5_verifica.py",
+    "/app/test_reports/pytest/iter5_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Supervisor-managed frontend required a `supervisorctl restart frontend` for the new public/index.html to be served (the running webpack-dev-server was serving a stale cached index). Main agent / deploy flow should ensure index.html edits force a dev-server bounce in future.",
+    "server.py length warning carried over from iter4 (now 1095+ lines) — modular split still recommended."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter5_verifica.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Admin lausim99@gmail.com / Metodolau; Athlete mario.rossi@example.com / Mario2026!",
+  "seed_data_creation": "Created and deleted a TEST progress row for Mario (date 2026-01-15). Calendar ics_url PUT with ftp://x validated 400 then reset to empty string as instructed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Italian lang fix validated end-to-end. test_iter5_verifica.py is a 9-test regression suite covering auth, me/workouts, contacts, admin calendar validation, admin progress new fields CRUD, and PDF inline/attachment. Email send buttons intentionally NOT clicked (would send real emails per agent note). If frontend changes to public/index.html again, remember to restart frontend supervisor since CRA dev server cached the template.",
+  "rca of the issue": "Original bug: index.html had lang=\"en\" causing Chrome/Safari auto-translate to replace Italian labels. Fix (already applied by main agent) adds lang=\"it\" + translate=\"no\" + class=\"notranslate\" on <html>, plus meta google=notranslate and Content-Language=it; manifest.json lang=it. Validated via curl + runtime DOM check."
+}

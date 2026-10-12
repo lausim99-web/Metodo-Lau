@@ -86,6 +86,9 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - Login: occhiello mostra/nascondi password
 - Test: server ICS locale su :8099 → 1 creata, 1 non riconosciuta, idempotente
 
+## Implemented (2026-06, fork 2 — round 12)
+- BUG FIX traduzione automatica mobile (Acqua→Angolo, WhatsApp→Bomba, Alimentazione→Utilizzo): index.html aveva lang="en" → ora lang="it" translate="no" class="notranslate" + meta google notranslate + Content-Language it; manifest lang it. Verifica generale: iterazione 5 tutto pass (9/9 backend, frontend ok, 0 console errors)
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template
