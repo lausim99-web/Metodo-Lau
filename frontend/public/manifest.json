@@ -21,5 +21,7 @@
       "type": "image/png",
       "purpose": "any"
     }
-  ]
+  ],
+  "lang": "it",
+  "dir": "ltr"
 }
