@@ -8,6 +8,15 @@ crons:
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     enabled: true
 
+  # Ogni 30 minuti: legge il calendario Apple/Google condiviso (.ics) e crea/aggiorna le sessioni
+  - name: calendar-sync
+    description: "Sincronizza le sessioni PT dal calendario condiviso (.ics) del Personal Trainer"
+    cron: "*/30 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/calendar-sync"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
+
   # 7:00 UTC = 9:00 Italia: avvisi scadenza schede (6 settimane) a 7 giorni, 1 giorno e il giorno stesso
   - name: plan-expiry
     description: "Avvisi email scadenza scheda allenamento / piano alimentare (7gg, 1g, giorno stesso) ad atleta e PT"

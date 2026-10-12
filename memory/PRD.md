@@ -80,6 +80,12 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 ## Implemented (2026-06, fork 2 — round 10)
 - Progressi estesi (Report Plicometria): aggiunti lean_mass_kg, fat_mass_kg, waist_cm, hips_cm, chest_cm, arms_cm, legs_cm. Metriche condivise in frontend/src/metrics.js; form PT raggruppato (Composizione/BIA/Circonferenze); lato atleta card con variazione vs rilevazione precedente, mostrate solo le metriche valorizzate
 
+## Implemented (2026-06, fork 2 — round 11)
+- Sync calendario Apple/Google (read-only .ics/webcal): settings.calendar.ics_url; GET/PUT /api/admin/calendar, POST /api/admin/calendar/sync, cron ogni 30 min POST /api/cron/calendar-sync. Match atleta per email invitato o nome completo nel titolo/descrizione; crea/aggiorna/rimuove sessioni (campo calendar_uid); eventi non riconosciuti mostrati in admin. Lib: icalendar
+- Email immediata 'Nuova sessione fissata' a creazione sessione (manuale o da calendario) e quando viene spostata
+- Login: occhiello mostra/nascondi password
+- Test: server ICS locale su :8099 → 1 creata, 1 non riconosciuta, idempotente
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template

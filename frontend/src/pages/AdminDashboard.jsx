@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../components/AppShell";
+import CalendarSyncCard from "../components/CalendarSyncCard";
 import { api, formatErr } from "../api";
 import { toast } from "sonner";
 import { UserPlus, Users, ArrowRight, Trash2, KeyRound, Instagram, MessageCircle, Phone, Mail, Save, Search, ArrowDownAZ, ArrowUpZA, Clock, Link as LinkIcon, Globe } from "lucide-react";
@@ -123,6 +124,7 @@ export default function AdminDashboard() {
   return (
     <AppShell title="Gestione Atleti">
       <ContactsEditor />
+      <CalendarSyncCard />
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2 text-zinc-400">
           <Users size={18} className="text-yellow-400" />

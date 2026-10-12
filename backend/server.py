@@ -905,7 +905,143 @@ async def create_session(client_id: str, body: SessionIn, _: dict = Depends(requ
            "created_at": datetime.now(timezone.utc).isoformat()}
     await db.sessions.insert_one(doc)
     doc.pop("_id", None)
+    asyncio.create_task(send_session_created_email(u, doc))
     return doc
+
+async def send_session_created_email(client: dict, s: dict) -> bool:
+    """Immediate email when a new PT session is scheduled (manual or from calendar sync)."""
+    try:
+        date_it = datetime.strptime(s["date"], "%Y-%m-%d").strftime("%d/%m/%Y")
+        name = escape((client.get("name") or "Atleta").split(" ")[0])
+        html = (
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
+            '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
+            'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
+            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODOLAU</div>'
+            '<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">Nuova sessione fissata!</h1>'
+            f'<p style="{BODY};margin:0 0 8px">Ciao {name}, il tuo Personal Trainer ha fissato un allenamento privato con te:</p>'
+            f'<p style="color:#ffffff;font-size:20px;font-weight:bold;margin:8px 0 16px">{date_it} alle {escape(s["time"])}'
+            + (f'<br><span style="color:#a1a1aa;font-size:15px;font-weight:normal">{escape(s["location"])}</span>' if s.get("location") else '') + '</p>'
+            f'<p style="{BODY};margin:0 0 16px">Ti ricorderemo l\'appuntamento 24 ore e 1 ora prima.</p>'
+            f'<a href="{APP_URL}" style="display:inline-block;background:#F5C518;color:#0A0A0D;font-weight:bold;font-size:14px;'
+            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app</a>'
+            '</td></tr></table></td></tr></table>'
+        )
+        return bool(await send_email(to=client["email"], subject=f"{EMAIL_FROM_NAME}: nuova sessione il {date_it} alle {s['time']}", html=html))
+    except Exception as e:
+        logger.error(f"send_session_created_email failed: {e}")
+        return False
+
+# ---------- Apple/Google calendar sync (public .ics URL, read-only) ----------
+class CalendarIn(BaseModel):
+    ics_url: str = ""
+
+def _norm(s: str) -> str:
+    return re.sub(r"[^a-z0-9 ]", " ", (s or "").lower())
+
+@api.get("/admin/calendar")
+async def get_calendar(_: dict = Depends(require_admin)):
+    s = await db.settings.find_one({"key": "calendar"})
+    v = (s or {}).get("value", {})
+    return {"ics_url": v.get("ics_url", ""), "last_sync": v.get("last_sync"), "last_result": v.get("last_result"),
+            "unmatched": v.get("unmatched", [])}
+
+@api.put("/admin/calendar")
+async def set_calendar(body: CalendarIn, _: dict = Depends(require_admin)):
+    url = body.ics_url.strip()
+    if url and not re.match(r"^(webcal|https?)://", url, re.I):
+        raise HTTPException(400, "Inserisci un link che inizia con webcal:// o https://")
+    await db.settings.update_one({"key": "calendar"}, {"$set": {"value.ics_url": url}}, upsert=True)
+    return {"ok": True}
+
+@api.post("/admin/calendar/sync")
+async def manual_calendar_sync(_: dict = Depends(require_admin)):
+    return await _sync_calendar()
+
+async def _sync_calendar() -> dict:
+    from icalendar import Calendar
+    s = await db.settings.find_one({"key": "calendar"})
+    url = ((s or {}).get("value") or {}).get("ics_url", "")
+    if not url:
+        return {"ok": False, "error": "Nessun calendario collegato"}
+    http_url = re.sub(r"^webcal://", "https://", url, flags=re.I)
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as c:
+            r = await c.get(http_url)
+            r.raise_for_status()
+        cal = Calendar.from_ical(r.content)
+    except Exception as e:
+        logger.error(f"calendar fetch failed: {e}")
+        await db.settings.update_one({"key": "calendar"}, {"$set": {"value.last_sync": datetime.now(timezone.utc).isoformat(),
+                                                                   "value.last_result": f"Errore lettura calendario: {e}"}})
+        return {"ok": False, "error": "Impossibile leggere il calendario (controlla il link)"}
+
+    clients = [{"id": str(u["_id"]), "email": (u.get("email") or "").lower(), "name": _norm(u.get("name")), "doc": u}
+               async for u in db.users.find({"role": "client"})]
+    now_rome = datetime.now(ROME)
+    seen_uids, created, updated, unmatched = set(), 0, 0, []
+    for ev in cal.walk("VEVENT"):
+        dtstart = ev.get("DTSTART")
+        if dtstart is None:
+            continue
+        start = dtstart.dt
+        if not isinstance(start, datetime):  # all-day event → skip (no time)
+            continue
+        start = (start.replace(tzinfo=timezone.utc) if start.tzinfo is None else start).astimezone(ROME)
+        if start < now_rome - timedelta(hours=1):
+            continue
+        summary = str(ev.get("SUMMARY") or "")
+        attendees = ev.get("ATTENDEE") or []
+        attendees = attendees if isinstance(attendees, list) else [attendees]
+        emails = {str(a).lower().replace("mailto:", "") for a in attendees}
+        text = _norm(summary) + " " + _norm(str(ev.get("DESCRIPTION") or ""))
+        match = next((c for c in clients if c["email"] and c["email"] in emails), None) or \
+                next((c for c in clients if c["name"] and f" {c['name']} " in f" {text} "), None)
+        if not match:
+            unmatched.append({"summary": summary, "date": start.strftime("%d/%m/%Y %H:%M")})
+            continue
+        uid = str(ev.get("UID") or f"{summary}-{start.isoformat()}")
+        seen_uids.add(uid)
+        dur = 60
+        dtend = ev.get("DTEND")
+        if dtend is not None and isinstance(dtend.dt, datetime):
+            dur = max(15, int((dtend.dt.astimezone(ROME) - start).total_seconds() // 60))
+        fields = {"user_id": match["id"], "date": start.strftime("%Y-%m-%d"), "time": start.strftime("%H:%M"),
+                  "datetime_local": start.replace(tzinfo=None).isoformat(), "duration_min": dur,
+                  "location": str(ev.get("LOCATION") or ""), "notes": summary}
+        existing = await db.sessions.find_one({"calendar_uid": uid})
+        if not existing:
+            doc = {"id": str(uuid.uuid4()), "calendar_uid": uid, "reminder_sent": False,
+                   "created_at": datetime.now(timezone.utc).isoformat(), **fields}
+            await db.sessions.insert_one(doc)
+            created += 1
+            asyncio.create_task(send_session_created_email(match["doc"], doc))
+        elif any(existing.get(k) != v for k, v in fields.items()):
+            moved = existing.get("date") != fields["date"] or existing.get("time") != fields["time"]
+            upd = dict(fields)
+            if moved:
+                upd.update({"reminder_sent": False, "reminder_24h_sent": False, "reminder_1h_sent": False})
+            await db.sessions.update_one({"calendar_uid": uid}, {"$set": upd})
+            updated += 1
+            if moved:
+                asyncio.create_task(send_session_created_email(match["doc"], {**existing, **fields}))
+    # future sessions that came from the calendar but are no longer there → removed
+    today = now_rome.date().isoformat()
+    removed = (await db.sessions.delete_many({"calendar_uid": {"$exists": True, "$nin": list(seen_uids)}, "date": {"$gte": today}})).deleted_count
+    result = f"{created} nuove, {updated} aggiornate, {removed} rimosse, {len(unmatched)} non riconosciute"
+    await db.settings.update_one({"key": "calendar"}, {"$set": {"value.last_sync": datetime.now(timezone.utc).isoformat(),
+                                                               "value.last_result": result, "value.unmatched": unmatched[:30]}})
+    logger.info(f"calendar sync: {result}")
+    return {"ok": True, "created": created, "updated": updated, "removed": removed, "unmatched": unmatched[:30], "result": result}
+
+@api.post("/cron/calendar-sync")
+async def cron_calendar_sync(request: Request):
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    if not WEBHOOK_CRON_SECRET or not hmac.compare_digest(token, WEBHOOK_CRON_SECRET):
+        raise HTTPException(401, "Unauthorized")
+    asyncio.create_task(_sync_calendar())
+    return {"ok": True}
 
 async def _list_sessions(user_id: str, upcoming_only: bool = False):
     out = []

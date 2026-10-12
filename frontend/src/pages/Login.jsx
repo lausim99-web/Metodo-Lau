@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Logo from "../components/Logo";
 import { useAuth } from "../auth";
@@ -11,6 +12,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
+  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -54,13 +56,20 @@ export default function Login() {
           </div>
           <div>
             <label className="text-xs uppercase tracking-widest text-zinc-400 font-mono-num block mb-2">Password</label>
-            <input
-              type="password" required
-              value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              data-testid="login-password-input"
-              className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded-lg px-4 py-3 text-base text-white placeholder:text-zinc-600"
-            />
+            <div className="relative">
+              <input
+                type={showPw ? "text" : "password"} required
+                value={password} onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                data-testid="login-password-input"
+                className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded-lg px-4 py-3 pr-12 text-base text-white placeholder:text-zinc-600"
+              />
+              <button type="button" onClick={() => setShowPw(!showPw)} data-testid="login-password-toggle"
+                      aria-label={showPw ? "Nascondi password" : "Mostra password"}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-yellow-400 p-1">
+                {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
           <label className="flex items-center gap-3 cursor-pointer select-none" data-testid="login-remember-label">
             <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)}
