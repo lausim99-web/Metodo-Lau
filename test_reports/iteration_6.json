@@ -1,0 +1,34 @@
+{
+  "summary": "Verified photo-notes bug fix end-to-end. Backend persists & returns notes on upload, list (admin + /me/photos) and after delete it's gone. Frontend: PT PhotosSection renders notes under date (data-testid photo-notes-{id}); athlete PhotosTab renders notes under date (me-photo-notes-{id}) and in lightbox (photo-lightbox-notes) with tag + date; clicking the note does NOT close the lightbox (stopPropagation OK); clicking dark background closes it; close button also closes it. Mobile 390px: no horizontal overflow. Existing photos without notes still render without 'undefined'/'null'. All test photos cleaned up; Mario gallery restored to the 3 seeded photos (prima/check/dopo) and his password restored to Mario2026! with must_change_password=false.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "ClientDetail PhotosSection upload bar", "issues": ["The 'Note (opz.)' input has no data-testid, forcing tests to rely on placeholder. Suggest adding data-testid='photo-notes-input' for robustness."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter6_photo_notes.py",
+    "/app/test_reports/pytest/iter6.xml"
+  ],
+  "action_items": [
+    "(optional) Add data-testid='photo-notes-input' on the Note (opz.) input in ClientDetail.jsx PhotosSection (~L189) for test robustness.",
+    "(optional) Admin PUT /api/admin/clients/{id}/password sets must_change_password=true; be aware that resetting Mario's password forces the set-password screen on next login — the test credentials file warns against changing passwords for this reason. During lockout recovery the testing agent reset and then self-restored via /api/me/password."
+  ],
+  "critical_code_review_comments": [
+    "Hydration warning observed on PT /admin/clients/{id} schede: <span> inside <option> (React doesn't allow children inside <option>). Non-blocking but produces console error on every render — see ClientDetail.jsx L111 workouts-week select options.",
+    "Login response field is 'token' (not 'access_token'); keep consistent naming across endpoints to avoid confusion in integrations/tests.",
+    "server.py is ~1475 lines — consider splitting routes into modules (auth/admin/me/photos/workouts/...) per code-review guideline on file size."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter6_photo_notes.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Admin lausim99@gmail.com/Metodolau; Athlete mario.rossi@example.com/Mario2026! (restored after reset).",
+  "seed_data_creation": "No seed changes. Created and cleaned up 3 ephemeral photos during tests. Mario left with the 3 seeded photos.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "If Mario login returns 401 unexpectedly, likely brute-force lockout from prior tests. Reset via admin PUT /api/admin/clients/{id}/password then immediately login as Mario and POST /api/me/password with same current/new to clear must_change_password=true. Backend pytest uses REACT_APP_BACKEND_URL env; run with: REACT_APP_BACKEND_URL=https://lau-connect.preview.emergentagent.com pytest backend/tests/test_iter6_photo_notes.py -v",
+  "rca of the issue": "Backend already saved+returned 'notes', but the two React components rendering galleries (PT: PhotosSection in ClientDetail.jsx and athlete: PhotosTab in ClientDashboard.jsx including the portal lightbox) did not read p.notes. Fix added conditional {p.notes && <div ... data-testid=photo-notes-{id} / me-photo-notes-{id}>} under the date on each card, plus a photo-lightbox-notes block (with onClick stopPropagation on the inner container to avoid closing when note is clicked). Verified by uploading via API and UI, checking GET endpoints and DOM, and cleaning up."
+}

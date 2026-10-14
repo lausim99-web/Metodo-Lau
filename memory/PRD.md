@@ -93,6 +93,9 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - Lightbox foto atleta: pulsante X in alto a destra (+ tap sulla foto)
 - Fedeltà (solo PT): GET /api/admin/clients/{id}/loyalty conta sessioni passate non gratuite; ogni 10 → 1 lezione gratis. Controllo orario in cron session-reminders (_check_loyalty) → email al PT (ADMIN_EMAIL) una volta per livello (users.loyalty_notified_level). Pulsante 'Avvisa atleta' → POST /free-lesson-email (email con WhatsApp). Checkbox 'Lezione gratuita' (sessions.is_free) non conta e consuma il premio. Card LoyaltyCard in ClientDetail tab Sessioni
 
+## Implemented (2026-06, fork 2 — round 14)
+- BUG FIX note foto: salvate ma mai mostrate → ora sotto la data nelle gallery PT e atleta e nel lightbox (con tag+data). Iterazione 6 pass
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template
