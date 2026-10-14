@@ -7,7 +7,7 @@ import { useAuth } from "../auth";
 import { toast } from "sonner";
 import PdfViewer from "../components/PdfViewer";
 import { METRICS, delta } from "../metrics";
-import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye, Calendar, PlayCircle, Clock, X } from "lucide-react";
+import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye, Calendar, PlayCircle, Clock, X, AlertTriangle } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
 const TABS = [
@@ -277,20 +277,38 @@ function ProgressTab() {
   );
 }
 
+function PolicyNote({ text }) {
+  if (!text) return null;
+  return (
+    <div className="flex items-start gap-3 p-4 rounded-lg border border-yellow-500/40 bg-yellow-400/5 text-sm text-zinc-200" data-testid="session-policy">
+      <AlertTriangle size={18} className="text-yellow-400 shrink-0 mt-0.5" />
+      <div><span className="font-display font-bold uppercase tracking-wider text-yellow-400 mr-2">Regole disdetta</span>{text}</div>
+    </div>
+  );
+}
+
 function SessionsTab() {
   const [items, setItems] = useState([]);
-  useEffect(() => { api.get("/me/sessions").then((r) => setItems(r.data)).catch(() => {}); }, []);
+  const [policy, setPolicy] = useState("");
+  useEffect(() => {
+    api.get("/me/sessions").then((r) => setItems(r.data)).catch(() => {});
+    api.get("/me/session-policy").then((r) => setPolicy(r.data.policy)).catch(() => {});
+  }, []);
   if (!items.length) return (
-    <div className="lau-card p-8 text-center">
-      <Calendar className="mx-auto text-yellow-400 mb-3" size={40} />
-      <p className="text-lg text-white font-bold">Nessuna sessione programmata</p>
-      <p className="text-sm text-zinc-400 mt-2">Quando il PT fissa un allenamento privato apparirà qui — e ti arriveranno due email: 24 ore prima e 1 ora prima.</p>
+    <div className="space-y-3">
+      <PolicyNote text={policy} />
+      <div className="lau-card p-8 text-center">
+        <Calendar className="mx-auto text-yellow-400 mb-3" size={40} />
+        <p className="text-lg text-white font-bold">Nessuna sessione programmata</p>
+        <p className="text-sm text-zinc-400 mt-2">Quando il PT fissa un allenamento privato apparirà qui — e ti arriveranno due email: 24 ore prima e 1 ora prima.</p>
+      </div>
     </div>
   );
   const today = new Date().toISOString().slice(0, 10);
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   return (
     <div className="space-y-3">
+      <PolicyNote text={policy} />
       {items.map((s) => {
         const isToday = s.date === today;
         const isTomorrow = s.date === tomorrow;

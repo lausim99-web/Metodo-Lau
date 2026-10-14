@@ -107,6 +107,9 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - UI PT: matita 'Sposta' con form inline data/ora/luogo; conferma annullamento
 - Pulsante 'Regala lezione gratis' sempre visibile (anche sotto 10); promemoria PT a 10 invariato
 
+## Implemented (2026-06, fork 2 — round 18)
+- Policy disdetta (CANCEL_POLICY): disdetta ≥24h prima; 2 disdette in 6 mesi → dalla terza si paga. Mostrata all'atleta nel tab Sessioni (GET /api/me/session-policy) e nelle email nuova/spostata sessione. PT: DELETE /admin/sessions/{id}?by_athlete=1 registra in `cancellations`; loyalty restituisce cancellations_6m + date; card Fedeltà evidenzia in rosso da 2 disdette
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template

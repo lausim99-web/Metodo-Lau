@@ -49,6 +49,8 @@ PLAN_DURATION_DAYS = 56  # 8 settimane (default)
 FEEDBACK_AFTER_DAYS = 21  # 3 settimane
 PT_WHATSAPP = os.environ.get("PT_WHATSAPP", "")
 EXPIRY_STAGES = {7: "7d", 1: "1d", 0: "0d"}
+CANCEL_POLICY = ("La lezione privata va disdetta almeno 24 ore prima dell'allenamento. "
+                 "Chi annulla 2 volte in 6 mesi, dalla terza disdetta è tenuto a pagare la lezione.")
 BODY = "color:#e4e4e7;font-size:17px;line-height:1.7"
 
 mongo_url = os.environ['MONGO_URL']
@@ -935,6 +937,8 @@ async def send_session_created_email(client: dict, s: dict, kind: str = "new", o
             f'<p style="color:#ffffff;font-size:20px;font-weight:bold;margin:8px 0 16px;{"text-decoration:line-through;color:#a1a1aa" if kind == "cancelled" else ""}">{when}'
             + (f'<br><span style="color:#a1a1aa;font-size:15px;font-weight:normal">{escape(s["location"])}</span>' if s.get("location") else '') + '</p>'
             f'<p style="{BODY};margin:0 0 16px">{tail}</p>'
+            + ('' if kind == "cancelled" else f'<p style="color:#a1a1aa;font-size:13px;line-height:1.6;margin:0 0 16px;padding:10px 12px;border-left:3px solid #F5C518;background:#0A0A0D">'
+               f'<strong style="color:#F5C518">Regole disdetta:</strong> {CANCEL_POLICY}</p>') +
             f'<a href="{APP_URL}" style="display:inline-block;background:#F5C518;color:#0A0A0D;font-weight:bold;font-size:14px;'
             'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app</a>'
             '</td></tr></table></td></tr></table>'
@@ -1111,11 +1115,18 @@ async def admin_sessions(client_id: str, _: dict = Depends(require_admin)):
 async def my_sessions(user: dict = Depends(get_current_user)):
     return await _list_sessions(user["id"], upcoming_only=True)
 
+@api.get("/me/session-policy")
+async def my_session_policy(_: dict = Depends(get_current_user)):
+    return {"policy": CANCEL_POLICY}
+
 @api.delete("/admin/sessions/{session_id}")
-async def delete_session(session_id: str, _: dict = Depends(require_admin)):
+async def delete_session(session_id: str, by_athlete: int = 0, _: dict = Depends(require_admin)):
     s = await db.sessions.find_one({"id": session_id})
     if not s:
         raise HTTPException(404, "Sessione non trovata")
+    if by_athlete:
+        await db.cancellations.insert_one({"id": str(uuid.uuid4()), "user_id": s["user_id"], "session_date": s["date"],
+                                           "session_time": s.get("time"), "created_at": datetime.now(timezone.utc).isoformat()})
     await db.sessions.delete_one({"id": session_id})
     if s.get("datetime_local", "") >= datetime.now(ROME).replace(tzinfo=None).isoformat() or s["date"] >= datetime.now(ROME).date().isoformat():
         client = await db.users.find_one({"_id": ObjectId(s["user_id"])})
@@ -1139,8 +1150,11 @@ async def _loyalty(user_id: str) -> dict:
         elif dt <= now:
             completed += 1
     unlocked = completed // LOYALTY_EVERY
+    since = (datetime.now(timezone.utc) - timedelta(days=182)).isoformat()
+    canc = [c async for c in db.cancellations.find({"user_id": user_id, "created_at": {"$gte": since}}).sort("created_at", -1)]
     return {"completed": completed, "unlocked": unlocked, "used": used, "available": max(0, unlocked - used),
-            "to_next": LOYALTY_EVERY - (completed % LOYALTY_EVERY), "every": LOYALTY_EVERY}
+            "to_next": LOYALTY_EVERY - (completed % LOYALTY_EVERY), "every": LOYALTY_EVERY,
+            "cancellations_6m": len(canc), "cancellation_dates": [c["session_date"] for c in canc], "policy": CANCEL_POLICY}
 
 @api.get("/admin/clients/{client_id}/loyalty")
 async def get_loyalty(client_id: str, _: dict = Depends(require_admin)):

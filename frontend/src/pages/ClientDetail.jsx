@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { api, formatErr, API, getToken } from "../api";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart, Clock, Gift, Pencil } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart, Clock, Gift, Pencil, AlertTriangle } from "lucide-react";
 import { METRICS, METRIC_KEYS, emptyProgress } from "../metrics";
 
 const TABS = [
@@ -339,6 +339,15 @@ function LoyaltyCard({ clientId, info, onNotify, busy }) {
         <div className="h-full bg-yellow-400 transition-all" style={{ width: `${info.available > 0 ? 100 : pct}%` }} />
       </div>
       <div className="flex justify-between text-[10px] font-mono-num text-zinc-500 mt-1"><span>{info.completed % info.every}/{info.every}</span><span>Lezione gratis</span></div>
+      <div className={`mt-3 flex items-start gap-2 text-xs rounded-lg p-3 border ${info.cancellations_6m >= 2 ? "border-red-500/50 bg-red-500/10 text-red-200" : "border-[#262633] bg-[#0A0A0D] text-zinc-400"}`} data-testid="loyalty-cancellations">
+        <AlertTriangle size={14} className={`shrink-0 mt-0.5 ${info.cancellations_6m >= 2 ? "text-red-400" : "text-yellow-400"}`} />
+        <div>
+          <strong className={info.cancellations_6m >= 2 ? "text-red-300" : "text-white"}>{info.cancellations_6m} {info.cancellations_6m === 1 ? "disdetta" : "disdette"} negli ultimi 6 mesi</strong>
+          {info.cancellations_6m >= 2 && <span> — dalla prossima disdetta la lezione è <strong>a pagamento</strong>.</span>}
+          {info.cancellation_dates?.length > 0 && <div className="text-[10px] font-mono-num mt-1 opacity-80">Lezioni disdette: {info.cancellation_dates.join(" · ")}</div>}
+          <div className="text-[10px] mt-1 opacity-80">{info.policy}</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -376,7 +385,8 @@ function SessionsSection({ clientId }) {
 
   const del = async (id, past) => {
     if (!window.confirm(past ? "Eliminare questa sessione passata?" : "Annullare questa sessione? L'atleta riceverà l'email di annullamento.")) return;
-    try { await api.delete(`/admin/sessions/${id}`); toast.success(past ? "Sessione eliminata" : "Sessione annullata — email inviata all'atleta"); load(); }
+    const byAthlete = !past && window.confirm("È stata DISDETTA DALL'ATLETA?\n\nOK = sì, conta ai fini della regola (2 disdette in 6 mesi, dalla terza si paga)\nAnnulla = no, l'ho annullata io");
+    try { await api.delete(`/admin/sessions/${id}?by_athlete=${byAthlete ? 1 : 0}`); toast.success(past ? "Sessione eliminata" : "Sessione annullata — email inviata all'atleta"); load(); }
     catch (e) { toast.error(formatErr(e)); }
   };
 
