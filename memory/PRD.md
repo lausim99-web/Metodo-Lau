@@ -102,6 +102,11 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 ## Implemented (2026-06, fork 2 — round 16)
 - Nuova icona app (emblema vichingo su nero) per PWA/home (icon-192/512, maskable, apple-touch-icon, favicon, ?v=2) e Logo.jsx ora usa /logo-emblem.png locale (trasparente) nella barra superiore e ForcePassword
 
+## Implemented (2026-06, fork 2 — round 17)
+- Email all'atleta quando una sessione viene spostata (PATCH /api/admin/sessions/{id}, reset promemoria) o annullata (DELETE, solo se futura); anche dal sync calendario (moved/cancelled)
+- UI PT: matita 'Sposta' con form inline data/ora/luogo; conferma annullamento
+- Pulsante 'Regala lezione gratis' sempre visibile (anche sotto 10); promemoria PT a 10 invariato
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template

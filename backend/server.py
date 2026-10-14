@@ -909,29 +909,72 @@ async def create_session(client_id: str, body: SessionIn, _: dict = Depends(requ
     asyncio.create_task(send_session_created_email(u, doc))
     return doc
 
-async def send_session_created_email(client: dict, s: dict) -> bool:
-    """Immediate email when a new PT session is scheduled (manual or from calendar sync)."""
+async def send_session_created_email(client: dict, s: dict, kind: str = "new", old: Optional[dict] = None) -> bool:
+    """Email when a PT session is created ('new'), moved ('moved') or cancelled ('cancelled')."""
     try:
         date_it = datetime.strptime(s["date"], "%Y-%m-%d").strftime("%d/%m/%Y")
         name = escape((client.get("name") or "Atleta").split(" ")[0])
+        when = f'{date_it} alle {escape(s["time"])}'
+        if kind == "moved":
+            old_it = datetime.strptime(old["date"], "%Y-%m-%d").strftime("%d/%m/%Y") if old else ""
+            head, intro, subject = "Sessione spostata", f"Ciao {name}, il tuo Personal Trainer ha <strong style=\"color:#F5C518\">spostato</strong> l'allenamento privato" + (f' del {old_it} alle {escape(old["time"])}' if old else '') + ". Nuovo appuntamento:", f"{EMAIL_FROM_NAME}: sessione spostata al {when}"
+            tail = "Ti ricorderemo il nuovo appuntamento 24 ore e 1 ora prima."
+        elif kind == "cancelled":
+            head, intro, subject = "Sessione annullata", f"Ciao {name}, il tuo Personal Trainer ha <strong style=\"color:#FF6B6B\">annullato</strong> l'allenamento privato previsto per:", f"{EMAIL_FROM_NAME}: sessione del {date_it} annullata"
+            tail = "Per fissare un nuovo appuntamento scrivi pure al tuo PT."
+        else:
+            head, intro, subject = "Nuova sessione fissata!", f"Ciao {name}, il tuo Personal Trainer ha fissato un allenamento privato con te:", f"{EMAIL_FROM_NAME}: nuova sessione il {when}"
+            tail = "Ti ricorderemo l'appuntamento 24 ore e 1 ora prima."
         html = (
             '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
             '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
             'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
             '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODOLAU</div>'
-            '<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">Nuova sessione fissata!</h1>'
-            f'<p style="{BODY};margin:0 0 8px">Ciao {name}, il tuo Personal Trainer ha fissato un allenamento privato con te:</p>'
-            f'<p style="color:#ffffff;font-size:20px;font-weight:bold;margin:8px 0 16px">{date_it} alle {escape(s["time"])}'
+            f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">{head}</h1>'
+            f'<p style="{BODY};margin:0 0 8px">{intro}</p>'
+            f'<p style="color:#ffffff;font-size:20px;font-weight:bold;margin:8px 0 16px;{"text-decoration:line-through;color:#a1a1aa" if kind == "cancelled" else ""}">{when}'
             + (f'<br><span style="color:#a1a1aa;font-size:15px;font-weight:normal">{escape(s["location"])}</span>' if s.get("location") else '') + '</p>'
-            f'<p style="{BODY};margin:0 0 16px">Ti ricorderemo l\'appuntamento 24 ore e 1 ora prima.</p>'
+            f'<p style="{BODY};margin:0 0 16px">{tail}</p>'
             f'<a href="{APP_URL}" style="display:inline-block;background:#F5C518;color:#0A0A0D;font-weight:bold;font-size:14px;'
             'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri l\'app</a>'
             '</td></tr></table></td></tr></table>'
         )
-        return bool(await send_email(to=client["email"], subject=f"{EMAIL_FROM_NAME}: nuova sessione il {date_it} alle {s['time']}", html=html))
+        return bool(await send_email(to=client["email"], subject=subject, html=html))
     except Exception as e:
         logger.error(f"send_session_created_email failed: {e}")
         return False
+
+class SessionPatch(BaseModel):
+    date: Optional[str] = None
+    time: Optional[str] = None
+    duration_min: Optional[int] = None
+    location: Optional[str] = None
+    notes: Optional[str] = None
+
+@api.patch("/admin/sessions/{session_id}")
+async def update_session(session_id: str, body: SessionPatch, _: dict = Depends(require_admin)):
+    s = await db.sessions.find_one({"id": session_id})
+    if not s:
+        raise HTTPException(404, "Sessione non trovata")
+    upd = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not upd:
+        return {"ok": True}
+    new_date, new_time = upd.get("date", s["date"]), upd.get("time", s["time"])
+    try:
+        dt = datetime.strptime(f"{new_date} {new_time}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        raise HTTPException(400, "Data o ora non valide")
+    moved = new_date != s["date"] or new_time != s["time"]
+    upd["datetime_local"] = dt.isoformat()
+    if moved:
+        upd.update({"reminder_sent": False, "reminder_24h_sent": False, "reminder_1h_sent": False})
+    await db.sessions.update_one({"id": session_id}, {"$set": upd})
+    if moved:
+        client = await db.users.find_one({"_id": ObjectId(s["user_id"])})
+        if client:
+            asyncio.create_task(send_session_created_email(client, {**s, **upd}, "moved", s))
+    doc = await db.sessions.find_one({"id": session_id}); doc.pop("_id", None)
+    return doc
 
 # ---------- Apple/Google calendar sync (public .ics URL, read-only) ----------
 class CalendarIn(BaseModel):
@@ -1025,10 +1068,16 @@ async def _sync_calendar() -> dict:
             await db.sessions.update_one({"calendar_uid": uid}, {"$set": upd})
             updated += 1
             if moved:
-                asyncio.create_task(send_session_created_email(match["doc"], {**existing, **fields}))
-    # future sessions that came from the calendar but are no longer there → removed
+                asyncio.create_task(send_session_created_email(match["doc"], {**existing, **fields}, "moved", existing))
+    # future sessions that came from the calendar but are no longer there → removed (+ email annullamento)
     today = now_rome.date().isoformat()
-    removed = (await db.sessions.delete_many({"calendar_uid": {"$exists": True, "$nin": list(seen_uids)}, "date": {"$gte": today}})).deleted_count
+    removed = 0
+    async for gone in db.sessions.find({"calendar_uid": {"$exists": True, "$nin": list(seen_uids)}, "date": {"$gte": today}}):
+        await db.sessions.delete_one({"_id": gone["_id"]})
+        removed += 1
+        cl = await db.users.find_one({"_id": ObjectId(gone["user_id"])})
+        if cl:
+            asyncio.create_task(send_session_created_email(cl, gone, "cancelled"))
     result = f"{created} nuove, {updated} aggiornate, {removed} rimosse, {len(unmatched)} non riconosciute"
     await db.settings.update_one({"key": "calendar"}, {"$set": {"value.last_sync": datetime.now(timezone.utc).isoformat(),
                                                                "value.last_result": result, "value.unmatched": unmatched[:30]}})
@@ -1064,9 +1113,14 @@ async def my_sessions(user: dict = Depends(get_current_user)):
 
 @api.delete("/admin/sessions/{session_id}")
 async def delete_session(session_id: str, _: dict = Depends(require_admin)):
-    r = await db.sessions.delete_one({"id": session_id})
-    if r.deleted_count == 0:
+    s = await db.sessions.find_one({"id": session_id})
+    if not s:
         raise HTTPException(404, "Sessione non trovata")
+    await db.sessions.delete_one({"id": session_id})
+    if s.get("datetime_local", "") >= datetime.now(ROME).replace(tzinfo=None).isoformat() or s["date"] >= datetime.now(ROME).date().isoformat():
+        client = await db.users.find_one({"_id": ObjectId(s["user_id"])})
+        if client:
+            asyncio.create_task(send_session_created_email(client, s, "cancelled"))
     return {"ok": True}
 
 # ---------- Fedeltà: 10 lezioni private → 1 gratis (visibile solo al PT) ----------

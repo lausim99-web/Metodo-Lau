@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { api, formatErr, API, getToken } from "../api";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart, Clock, Gift } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart, Clock, Gift, Pencil } from "lucide-react";
 import { METRICS, METRIC_KEYS, emptyProgress } from "../metrics";
 
 const TABS = [
@@ -329,12 +329,11 @@ function LoyaltyCard({ clientId, info, onNotify, busy }) {
             {info.used > 0 && <span className="text-zinc-500"> · {info.used} gratis già usate</span>}
           </div>
         </div>
-        {info.available > 0 && (
-          <button onClick={onNotify} disabled={busy} data-testid="free-lesson-email-btn"
-                  className="lau-gold-btn px-4 py-2 rounded-lg text-xs flex items-center gap-2 disabled:opacity-50">
-            <Gift size={14} /> Avvisa atleta (email + WhatsApp)
-          </button>
-        )}
+        <button onClick={onNotify} disabled={busy} data-testid="free-lesson-email-btn"
+                title="Puoi regalare una lezione in qualsiasi momento: l'atleta riceve l'email con il pulsante WhatsApp"
+                className={`px-4 py-2 rounded-lg text-xs flex items-center gap-2 disabled:opacity-50 ${info.available > 0 ? "lau-gold-btn" : "border border-yellow-500/50 text-yellow-300 hover:bg-yellow-400/10"}`}>
+          <Gift size={14} /> Regala lezione gratis
+        </button>
       </div>
       <div className="mt-3 h-2 rounded-full bg-[#0A0A0D] border border-[#262633] overflow-hidden">
         <div className="h-full bg-yellow-400 transition-all" style={{ width: `${info.available > 0 ? 100 : pct}%` }} />
@@ -356,7 +355,7 @@ function SessionsSection({ clientId }) {
   useEffect(() => { load(); }, [clientId]);
 
   const notify = async () => {
-    if (!window.confirm("Inviare all'atleta l'email 'Hai sbloccato una lezione gratis' con il pulsante WhatsApp?")) return;
+    if (!window.confirm("Regalare una lezione gratuita? L'atleta riceve subito l'email con il pulsante WhatsApp per fissarla.")) return;
     setBusy(true);
     try { await api.post(`/admin/clients/${clientId}/free-lesson-email`); toast.success("Email inviata all'atleta"); }
     catch (e) { toast.error(formatErr(e)); }
@@ -373,10 +372,22 @@ function SessionsSection({ clientId }) {
     } catch (e) { toast.error(formatErr(e)); }
   };
 
-  const del = async (id) => {
-    if (!window.confirm("Eliminare questa sessione?")) return;
-    try { await api.delete(`/admin/sessions/${id}`); toast.success("Sessione eliminata"); load(); }
+  const [editing, setEditing] = useState(null);
+
+  const del = async (id, past) => {
+    if (!window.confirm(past ? "Eliminare questa sessione passata?" : "Annullare questa sessione? L'atleta riceverà l'email di annullamento.")) return;
+    try { await api.delete(`/admin/sessions/${id}`); toast.success(past ? "Sessione eliminata" : "Sessione annullata — email inviata all'atleta"); load(); }
     catch (e) { toast.error(formatErr(e)); }
+  };
+
+  const move = async (e, s) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+      await api.patch(`/admin/sessions/${s.id}`, { date: fd.get("date"), time: fd.get("time"), location: fd.get("location") || "" });
+      toast.success("Sessione spostata — l'atleta riceve l'email con il nuovo orario");
+      setEditing(null); load();
+    } catch (e2) { toast.error(formatErr(e2)); }
   };
 
   const today = new Date().toISOString().slice(0, 10);
@@ -438,7 +449,8 @@ function SessionsSection({ clientId }) {
               const past = s.date < today;
               const tomorrow = s.date === new Date(Date.now() + 86400000).toISOString().slice(0, 10);
               return (
-                <div key={s.id} className={`flex items-center gap-3 p-3 rounded-lg border ${past ? "border-[#262633] opacity-50" : "border-yellow-500/30 bg-yellow-400/5"}`}
+                <div key={s.id}>
+                <div className={`flex items-center gap-3 p-3 rounded-lg border ${past ? "border-[#262633] opacity-50" : "border-yellow-500/30 bg-yellow-400/5"}`}
                      data-testid={`session-${s.id}`}>
                   <Calendar size={18} className={past ? "text-zinc-500" : "text-yellow-400"} />
                   <div className="flex-1 min-w-0">
@@ -452,9 +464,26 @@ function SessionsSection({ clientId }) {
                       {s.notes && <span className="normal-case tracking-normal text-zinc-500"> — {s.notes}</span>}
                     </div>
                   </div>
-                  <button onClick={() => del(s.id)} className="p-2 text-zinc-400 hover:text-red-400" data-testid={`del-session-${s.id}`}>
+                  <button onClick={() => setEditing(editing === s.id ? null : s.id)} disabled={past} className="p-2 text-zinc-400 hover:text-yellow-400 disabled:opacity-30" title="Sposta" data-testid={`move-session-${s.id}`}>
+                    <Pencil size={16} />
+                  </button>
+                  <button onClick={() => del(s.id, past)} className="p-2 text-zinc-400 hover:text-red-400" data-testid={`del-session-${s.id}`}>
                     <Trash2 size={16} />
                   </button>
+                </div>
+                {editing === s.id && (
+                  <form onSubmit={(e) => move(e, s)} className="flex flex-wrap items-center gap-2 p-3 -mt-1 rounded-b-lg border border-t-0 border-yellow-500/30 bg-[#0A0A0D]" data-testid={`move-form-${s.id}`}>
+                    <span className="text-[10px] uppercase tracking-widest text-yellow-400 font-mono-num">Sposta a</span>
+                    <input type="date" name="date" required defaultValue={s.date} min={today} data-testid={`move-date-${s.id}`}
+                           className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-2 py-1.5 text-sm text-white [color-scheme:dark]" />
+                    <input type="time" name="time" required defaultValue={s.time} data-testid={`move-time-${s.id}`}
+                           className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-2 py-1.5 text-sm text-white [color-scheme:dark]" />
+                    <input name="location" placeholder="Luogo" defaultValue={s.location || ""} data-testid={`move-location-${s.id}`}
+                           className="bg-[#121218] border border-[#262633] focus:border-yellow-500 outline-none rounded px-2 py-1.5 text-sm text-white flex-1 min-w-[8rem]" />
+                    <button type="submit" className="lau-gold-btn px-3 py-1.5 rounded text-xs" data-testid={`move-submit-${s.id}`}>Conferma</button>
+                    <button type="button" onClick={() => setEditing(null)} className="text-xs text-zinc-400 px-2">Annulla</button>
+                  </form>
+                )}
                 </div>
               );
             })}
