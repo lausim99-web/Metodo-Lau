@@ -212,6 +212,7 @@ function PhotosSection({ clientId }) {
               </button>
               <div className="text-[10px] p-2 text-zinc-400 font-mono-num">
                 {p.photo_date || new Date(p.uploaded_at).toLocaleDateString("it-IT")}
+                {p.notes && <div className="text-xs text-zinc-200 normal-case tracking-normal font-sans mt-1 line-clamp-3" data-testid={`photo-notes-${p.id}`}>{p.notes}</div>}
               </div>
             </div>
           ))}

@@ -144,7 +144,7 @@ function PhotosTab() {
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
         {items.map((p) => (
-          <button key={p.id} onClick={() => blobs[p.id] && setBig(blobs[p.id])} className="relative border border-[#262633] rounded-lg overflow-hidden bg-[#0A0A0D] text-left" data-testid={`me-photo-${p.id}`}>
+          <button key={p.id} onClick={() => blobs[p.id] && setBig(p)} className="relative border border-[#262633] rounded-lg overflow-hidden bg-[#0A0A0D] text-left" data-testid={`me-photo-${p.id}`}>
             {blobs[p.id] ? (
               <img src={blobs[p.id]} alt={p.tag} className="w-full h-40 object-cover" />
             ) : <div className="w-full h-40 bg-zinc-800 animate-pulse" />}
@@ -153,19 +153,24 @@ function PhotosTab() {
             </div>
             <div className="text-[10px] p-2 text-zinc-400 font-mono-num">
               {p.photo_date || new Date(p.uploaded_at).toLocaleDateString("it-IT")}
+              {p.notes && <div className="text-xs text-zinc-200 normal-case tracking-normal font-sans mt-1 line-clamp-3" data-testid={`me-photo-notes-${p.id}`}>{p.notes}</div>}
             </div>
           </button>
         ))}
       </div>
       {big && createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4" onClick={() => setBig(null)} data-testid="photo-lightbox">
+        <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-4" onClick={() => setBig(null)} data-testid="photo-lightbox">
           <button onClick={() => setBig(null)} data-testid="photo-lightbox-close" aria-label="Chiudi"
                   className="absolute top-4 right-4 lau-gold-btn w-11 h-11 rounded-full flex items-center justify-center shadow-xl"
                   style={{ top: "max(1rem, env(safe-area-inset-top))" }}>
             <X size={22} />
           </button>
-          <img src={big} alt="preview" className="max-w-full max-h-full rounded" />
-          <div className="absolute bottom-6 text-[10px] uppercase tracking-widest text-zinc-400 font-mono-num">Tocca la X o la foto per chiudere</div>
+          <img src={blobs[big.id]} alt="preview" className="max-w-full max-h-[70vh] rounded" />
+          <div className="mt-3 text-center max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="text-[10px] uppercase tracking-widest text-yellow-400 font-mono-num">{big.tag} · {big.photo_date || new Date(big.uploaded_at).toLocaleDateString("it-IT")}</div>
+            {big.notes && <div className="text-sm text-zinc-100 mt-1" data-testid="photo-lightbox-notes">{big.notes}</div>}
+          </div>
+          <div className="absolute bottom-4 text-[10px] uppercase tracking-widest text-zinc-500 font-mono-num">Tocca la X o la foto per chiudere</div>
         </div>,
         document.body
       )}
