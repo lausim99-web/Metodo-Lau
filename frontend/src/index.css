@@ -95,6 +95,37 @@ body {
 .lau-gold-btn:hover { background: var(--lau-gold-hover); transform: translateY(-1px); }
 .lau-gold-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
+/* Login: sfondo nero con bagliori e intrecci dorati */
+.lau-login {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 70% 45% at 50% 12%, rgba(245,197,24,0.22), transparent 60%),
+    radial-gradient(ellipse 60% 30% at 50% 100%, rgba(245,197,24,0.28), transparent 65%),
+    radial-gradient(ellipse 40% 60% at 0% 55%, rgba(245,197,24,0.10), transparent 60%),
+    radial-gradient(ellipse 40% 60% at 100% 55%, rgba(245,197,24,0.10), transparent 60%),
+    #050505;
+}
+.lau-login::before, .lau-login::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(135deg, transparent 0 46px, rgba(245,197,24,0.07) 46px 48px, transparent 48px 94px),
+    repeating-linear-gradient(45deg, transparent 0 46px, rgba(245,197,24,0.07) 46px 48px, transparent 48px 94px);
+  -webkit-mask-image: radial-gradient(ellipse 55% 70% at 50% 50%, transparent 35%, black 75%);
+  mask-image: radial-gradient(ellipse 55% 70% at 50% 50%, transparent 35%, black 75%);
+}
+.lau-login::after {
+  background:
+    linear-gradient(115deg, transparent 38%, rgba(245,197,24,0.35) 39%, transparent 40%),
+    linear-gradient(-115deg, transparent 38%, rgba(245,197,24,0.35) 39%, transparent 40%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 15%, black 45%, black 75%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 15%, black 45%, black 75%, transparent 100%);
+  opacity: .8;
+}
+
 .grain::before {
   content: '';
   position: fixed;

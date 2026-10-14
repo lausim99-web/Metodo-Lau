@@ -96,6 +96,9 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 ## Implemented (2026-06, fork 2 — round 14)
 - BUG FIX note foto: salvate ma mai mostrate → ora sotto la data nelle gallery PT e atleta e nel lightbox (con tag+data). Iterazione 6 pass
 
+## Implemented (2026-06, fork 2 — round 15)
+- Login ridisegnato su bozza utente: logo completo trasparente (public/logo-full.png), tagline, card bordo oro, campi con icone, checkbox oro, pulsante ENTRA pill con freccia, 'Password dimenticata?' (mostra suggerimento: chiedi al PT), sfondo nero con bagliori/intrecci dorati (.lau-login in index.css). Nessuna scritta 'prossimamente disponibile'
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template
