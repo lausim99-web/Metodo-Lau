@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import AppShell from "../components/AppShell";
 import ContactCard from "../components/ContactCard";
 import { api, API, getToken, formatErr } from "../api";
@@ -6,7 +7,7 @@ import { useAuth } from "../auth";
 import { toast } from "sonner";
 import PdfViewer from "../components/PdfViewer";
 import { METRICS, delta } from "../metrics";
-import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye, Calendar, PlayCircle, Clock } from "lucide-react";
+import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye, Calendar, PlayCircle, Clock, X } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
 const TABS = [
@@ -156,10 +157,17 @@ function PhotosTab() {
           </button>
         ))}
       </div>
-      {big && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setBig(null)}>
+      {big && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4" onClick={() => setBig(null)} data-testid="photo-lightbox">
+          <button onClick={() => setBig(null)} data-testid="photo-lightbox-close" aria-label="Chiudi"
+                  className="absolute top-4 right-4 lau-gold-btn w-11 h-11 rounded-full flex items-center justify-center shadow-xl"
+                  style={{ top: "max(1rem, env(safe-area-inset-top))" }}>
+            <X size={22} />
+          </button>
           <img src={big} alt="preview" className="max-w-full max-h-full rounded" />
-        </div>
+          <div className="absolute bottom-6 text-[10px] uppercase tracking-widest text-zinc-400 font-mono-num">Tocca la X o la foto per chiudere</div>
+        </div>,
+        document.body
       )}
     </>
   );

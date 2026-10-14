@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { api, formatErr, API, getToken } from "../api";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart, Clock } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart, Clock, Gift } from "lucide-react";
 import { METRICS, METRIC_KEYS, emptyProgress } from "../metrics";
 
 const TABS = [
@@ -310,18 +310,64 @@ function ProgressSection({ clientId }) {
   );
 }
 
+function LoyaltyCard({ clientId, info, onNotify, busy }) {
+  if (!info) return null;
+  const pct = Math.round(((info.completed % info.every) / info.every) * 100);
+  return (
+    <div className="lau-card p-5 lau-in border-yellow-500/30" data-testid="loyalty-card">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.35em] text-yellow-400 font-mono-num flex items-center gap-1"><Gift size={12} /> Fedeltà · solo PT</div>
+          <div className="font-display font-black text-2xl text-white mt-1" data-testid="loyalty-completed">
+            {info.completed} <span className="text-sm text-zinc-400 font-normal">lezioni private svolte</span>
+          </div>
+          <div className="text-xs text-zinc-400 mt-1">
+            {info.available > 0
+              ? <span className="text-green-400 font-bold" data-testid="loyalty-available">{info.available} {info.available === 1 ? "lezione gratuita disponibile" : "lezioni gratuite disponibili"}</span>
+              : <>Mancano <span className="text-white font-bold">{info.to_next}</span> lezioni alla prossima gratis</>}
+            {info.used > 0 && <span className="text-zinc-500"> · {info.used} gratis già usate</span>}
+          </div>
+        </div>
+        {info.available > 0 && (
+          <button onClick={onNotify} disabled={busy} data-testid="free-lesson-email-btn"
+                  className="lau-gold-btn px-4 py-2 rounded-lg text-xs flex items-center gap-2 disabled:opacity-50">
+            <Gift size={14} /> Avvisa atleta (email + WhatsApp)
+          </button>
+        )}
+      </div>
+      <div className="mt-3 h-2 rounded-full bg-[#0A0A0D] border border-[#262633] overflow-hidden">
+        <div className="h-full bg-yellow-400 transition-all" style={{ width: `${info.available > 0 ? 100 : pct}%` }} />
+      </div>
+      <div className="flex justify-between text-[10px] font-mono-num text-zinc-500 mt-1"><span>{info.completed % info.every}/{info.every}</span><span>Lezione gratis</span></div>
+    </div>
+  );
+}
+
 function SessionsSection({ clientId }) {
   const [items, setItems] = useState([]);
-  const [f, setF] = useState({ date: "", time: "", duration_min: 60, location: "", notes: "" });
-  const load = async () => { const r = await api.get(`/admin/clients/${clientId}/sessions`); setItems(r.data); };
+  const [loyalty, setLoyalty] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [f, setF] = useState({ date: "", time: "", duration_min: 60, location: "", notes: "", is_free: false });
+  const load = async () => {
+    const [r, l] = await Promise.all([api.get(`/admin/clients/${clientId}/sessions`), api.get(`/admin/clients/${clientId}/loyalty`)]);
+    setItems(r.data); setLoyalty(l.data);
+  };
   useEffect(() => { load(); }, [clientId]);
+
+  const notify = async () => {
+    if (!window.confirm("Inviare all'atleta l'email 'Hai sbloccato una lezione gratis' con il pulsante WhatsApp?")) return;
+    setBusy(true);
+    try { await api.post(`/admin/clients/${clientId}/free-lesson-email`); toast.success("Email inviata all'atleta"); }
+    catch (e) { toast.error(formatErr(e)); }
+    setBusy(false);
+  };
 
   const add = async (e) => {
     e.preventDefault();
     try {
       await api.post(`/admin/clients/${clientId}/sessions`, f);
-      toast.success("Sessione creata — l'atleta riceverà il promemoria 24h prima");
-      setF({ date: "", time: "", duration_min: 60, location: "", notes: "" });
+      toast.success("Sessione creata — l'atleta riceve subito l'email e i promemoria 24h e 1h prima");
+      setF({ date: "", time: "", duration_min: 60, location: "", notes: "", is_free: false });
       load();
     } catch (e) { toast.error(formatErr(e)); }
   };
@@ -336,10 +382,11 @@ function SessionsSection({ clientId }) {
 
   return (
     <div className="space-y-4">
+      <LoyaltyCard clientId={clientId} info={loyalty} onNotify={notify} busy={busy} />
       <form onSubmit={add} className="lau-card p-5 space-y-3 lau-in">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="font-display font-bold uppercase text-white">Nuova sessione privata</div>
-          <div className="text-[10px] uppercase tracking-widest text-yellow-400 font-mono-num">Promemoria email 24h prima</div>
+          <div className="text-[10px] uppercase tracking-widest text-yellow-400 font-mono-num">Email subito + promemoria 24h e 1h prima</div>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4">
           <div>
@@ -370,9 +417,15 @@ function SessionsSection({ clientId }) {
         <input placeholder="Note per l'atleta (opz. — cosa portare, focus della sessione...)" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })}
                data-testid="session-notes"
                className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
-        <button type="submit" data-testid="session-submit" className="lau-gold-btn px-4 py-2 rounded text-sm flex items-center gap-2">
-          <Plus size={16} /> Aggiungi sessione
-        </button>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <button type="submit" data-testid="session-submit" className="lau-gold-btn px-4 py-2 rounded text-sm flex items-center gap-2">
+            <Plus size={16} /> Aggiungi sessione
+          </button>
+          <label className="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer select-none">
+            <input type="checkbox" checked={f.is_free} onChange={(e) => setF({ ...f, is_free: e.target.checked })} data-testid="session-is-free" className="w-4 h-4 accent-yellow-400" />
+            <Gift size={14} className="text-yellow-400" /> Lezione gratuita (premio fedeltà, non conta nel conteggio)
+          </label>
+        </div>
       </form>
 
       <div className="lau-card p-4">
@@ -391,6 +444,7 @@ function SessionsSection({ clientId }) {
                     <div className="text-sm text-white font-mono-num">
                       {new Date(s.date + "T00:00").toLocaleDateString("it-IT", { weekday: "short", day: "2-digit", month: "short" })} · ore {s.time} · {s.duration_min}min
                       {s.location && <span className="text-zinc-400"> · {s.location}</span>}
+                      {s.is_free && <span className="ml-2 text-[10px] uppercase tracking-widest text-green-400 font-mono-num" data-testid={`session-free-${s.id}`}>· Gratis</span>}
                     </div>
                     <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono-num mt-0.5">
                       {past ? "PASSATA" : tomorrow ? (s.reminder_sent ? "DOMANI · promemoria inviato ✓" : "DOMANI · promemoria in programma") : "PROGRAMMATA"}

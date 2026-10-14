@@ -396,6 +396,7 @@ class SessionIn(BaseModel):
     duration_min: int = 60
     location: Optional[str] = ""
     notes: Optional[str] = ""
+    is_free: bool = False
 
 # ---------- Cookie helper ----------
 def set_auth_cookie(resp: Response, token: str, days: Optional[int] = None):
@@ -901,7 +902,7 @@ async def create_session(client_id: str, body: SessionIn, _: dict = Depends(requ
     doc = {"id": str(uuid.uuid4()), "user_id": client_id,
            "date": body.date, "time": body.time, "datetime_local": dt.isoformat(),
            "duration_min": body.duration_min, "location": body.location,
-           "notes": body.notes, "reminder_sent": False,
+           "notes": body.notes, "is_free": body.is_free, "reminder_sent": False,
            "created_at": datetime.now(timezone.utc).isoformat()}
     await db.sessions.insert_one(doc)
     doc.pop("_id", None)
@@ -1068,6 +1069,94 @@ async def delete_session(session_id: str, _: dict = Depends(require_admin)):
         raise HTTPException(404, "Sessione non trovata")
     return {"ok": True}
 
+# ---------- Fedeltà: 10 lezioni private → 1 gratis (visibile solo al PT) ----------
+LOYALTY_EVERY = 10
+
+async def _loyalty(user_id: str) -> dict:
+    now = datetime.now(ROME)
+    completed = used = 0
+    async for s in db.sessions.find({"user_id": user_id}):
+        try:
+            dt = datetime.strptime(f"{s['date']} {s['time']}", "%Y-%m-%d %H:%M").replace(tzinfo=ROME)
+        except (ValueError, KeyError):
+            continue
+        if s.get("is_free"):
+            used += 1
+        elif dt <= now:
+            completed += 1
+    unlocked = completed // LOYALTY_EVERY
+    return {"completed": completed, "unlocked": unlocked, "used": used, "available": max(0, unlocked - used),
+            "to_next": LOYALTY_EVERY - (completed % LOYALTY_EVERY), "every": LOYALTY_EVERY}
+
+@api.get("/admin/clients/{client_id}/loyalty")
+async def get_loyalty(client_id: str, _: dict = Depends(require_admin)):
+    return await _loyalty(client_id)
+
+async def send_loyalty_pt_email(client: dict, info: dict) -> bool:
+    try:
+        name = escape(client.get("name") or "Atleta")
+        html = (
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
+            '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
+            'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
+            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODOLAU · PT</div>'
+            f'<h1 style="color:#ffffff;font-size:24px;margin:12px 0 8px">{name} ha raggiunto {info["completed"]} lezioni private</h1>'
+            f'<p style="{BODY};margin:0 0 16px">Ha sbloccato una <strong style="color:#F5C518">lezione gratuita</strong> '
+            f'(disponibili: {info["available"]}). Dalla pagina dell\'atleta puoi avvisarlo con un tap: riceverà l\'email con il pulsante WhatsApp per fissarla.</p>'
+            f'<a href="{APP_URL}/admin/clients/{client["_id"]}" style="display:inline-block;background:#F5C518;color:#0A0A0D;font-weight:bold;font-size:14px;'
+            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:8px">Apri la scheda atleta</a>'
+            '</td></tr></table></td></tr></table>'
+        )
+        return bool(await send_email(to=ADMIN_EMAIL, subject=f"[PT] {name}: 10 lezioni raggiunte — lezione gratis sbloccata", html=html))
+    except Exception as e:
+        logger.error(f"send_loyalty_pt_email failed: {e}")
+        return False
+
+async def send_free_lesson_email(client: dict, info: dict) -> bool:
+    try:
+        first = escape((client.get("name") or "Atleta").split(" ")[0])
+        wa = _wa_url(client, f"Ciao! Sono {client.get('name') or ''}, ho sbloccato la lezione gratuita: quando possiamo fissarla?")
+        html = (
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
+            '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
+            'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
+            '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODOLAU</div>'
+            f'<h1 style="color:#ffffff;font-size:26px;margin:12px 0 8px">Complimenti {first}, hai sbloccato una lezione gratis!</h1>'
+            f'<p style="{BODY};margin:0 0 12px">Hai completato <strong style="color:#F5C518">{info["completed"]} lezioni private</strong> con il tuo Personal Trainer: '
+            'la costanza paga. Come premio, la prossima lezione privata te la offro io.</p>'
+            f'<p style="{BODY};margin:0 0 16px">Scrivimi su WhatsApp per scegliere insieme giorno e ora.</p>'
+            f'<a href="{wa}" style="display:inline-block;background:#25D366;color:#ffffff;font-weight:bold;font-size:15px;'
+            'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:14px 28px;border-radius:8px">Fissa la lezione su WhatsApp</a>'
+            f'<p style="color:#52525b;font-size:12px;margin:24px 0 0">Inviata da {escape(EMAIL_FROM_NAME)}.</p>'
+            '</td></tr></table></td></tr></table>'
+        )
+        return bool(await send_email(to=client["email"], subject=f"{EMAIL_FROM_NAME}: hai sbloccato una lezione gratis!", html=html))
+    except Exception as e:
+        logger.error(f"send_free_lesson_email failed: {e}")
+        return False
+
+@api.post("/admin/clients/{client_id}/free-lesson-email")
+async def manual_free_lesson_email(client_id: str, _: dict = Depends(require_admin)):
+    client = await db.users.find_one({"_id": ObjectId(client_id), "role": "client"})
+    if not client:
+        raise HTTPException(404, "Cliente non trovato")
+    info = await _loyalty(client_id)
+    if not await send_free_lesson_email(client, info):
+        raise HTTPException(400, "Invio email non riuscito (controlla il credito email su Emergent)")
+    await db.users.update_one({"_id": client["_id"]}, {"$set": {"free_lesson_notified_at": datetime.now(timezone.utc).isoformat()}})
+    return {"ok": True}
+
+async def _check_loyalty():
+    """Hourly: when an athlete crosses a multiple of 10 completed lessons, email the PT once."""
+    try:
+        async for u in db.users.find({"role": "client"}):
+            info = await _loyalty(str(u["_id"]))
+            if info["unlocked"] > (u.get("loyalty_notified_level") or 0):
+                if await send_loyalty_pt_email(u, info):
+                    await db.users.update_one({"_id": u["_id"]}, {"$set": {"loyalty_notified_level": info["unlocked"]}})
+    except Exception as e:
+        logger.error(f"_check_loyalty failed: {e}")
+
 async def send_session_reminder(client: dict, s: dict, stage: str = "24h"):
     """Email reminder 24h or 1h before a private PT session."""
     try:
@@ -1154,6 +1243,7 @@ async def _process_session_reminders(run_id: str):
                 await db.sessions.update_one({"id": s["id"]}, {"$set": updates})
         await db.cron_runs.update_one({"run_id": run_id}, {"$set": {"completed": True, "sent": sent}})
         logger.info(f"session reminders: sent {sent}")
+        await _check_loyalty()
     except Exception as e:
         logger.error(f"_process_session_reminders failed: {e}")
 
