@@ -115,6 +115,9 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 - BUG FIX: il sync calendario cancellava (con email 'annullata') le sessioni appena concluse perché gli eventi passati venivano saltati e poi considerati rimossi → ora gli UID passati vengono marcati come visti e si rimuovono solo sessioni con datetime_local futuro
 - Email 'lezione in regalo' senza conteggio lezioni
 
+## Implemented (2026-06, fork 2 — round 20)
+- Email feedback/scadenza: immagini riassegnate correttamente (feedback = 'Ciao! Come sta andando', expired = 'promemoria scaduti'); rimosso il testo duplicato sotto l'immagine → solo immagine + pulsante WhatsApp + footer
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template
