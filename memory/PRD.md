@@ -110,6 +110,11 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 ## Implemented (2026-06, fork 2 — round 18)
 - Policy disdetta (CANCEL_POLICY): disdetta ≥24h prima; 2 disdette in 6 mesi → dalla terza si paga. Mostrata all'atleta nel tab Sessioni (GET /api/me/session-policy) e nelle email nuova/spostata sessione. PT: DELETE /admin/sessions/{id}?by_athlete=1 registra in `cancellations`; loyalty restituisce cancellations_6m + date; card Fedeltà evidenzia in rosso da 2 disdette
 
+## Implemented (2026-06, fork 2 — round 19)
+- Nuove immagini email feedback/scadenza (public/email/feedback.jpg, expired.jpg)
+- BUG FIX: il sync calendario cancellava (con email 'annullata') le sessioni appena concluse perché gli eventi passati venivano saltati e poi considerati rimossi → ora gli UID passati vengono marcati come visti e si rimuovono solo sessioni con datetime_local futuro
+- Email 'lezione in regalo' senza conteggio lezioni
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template

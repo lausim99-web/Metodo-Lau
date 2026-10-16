@@ -1037,6 +1037,9 @@ async def _sync_calendar() -> dict:
             continue
         start = (start.replace(tzinfo=timezone.utc) if start.tzinfo is None else start).astimezone(ROME)
         if start < now_rome - timedelta(hours=1):
+            uid_past = str(ev.get("UID") or "")
+            if uid_past:
+                seen_uids.add(uid_past)  # evento passato: lo consideriamo presente, mai "rimosso"
             continue
         summary = str(ev.get("SUMMARY") or "")
         attendees = ev.get("ATTENDEE") or []
@@ -1073,10 +1076,11 @@ async def _sync_calendar() -> dict:
             updated += 1
             if moved:
                 asyncio.create_task(send_session_created_email(match["doc"], {**existing, **fields}, "moved", existing))
-    # future sessions that came from the calendar but are no longer there → removed (+ email annullamento)
-    today = now_rome.date().isoformat()
+    # sessioni FUTURE importate dal calendario ma non più presenti → rimosse (+ email annullamento).
+    # Le sessioni già iniziate/concluse non vengono mai toccate.
+    now_iso = now_rome.replace(tzinfo=None).isoformat()
     removed = 0
-    async for gone in db.sessions.find({"calendar_uid": {"$exists": True, "$nin": list(seen_uids)}, "date": {"$gte": today}}):
+    async for gone in db.sessions.find({"calendar_uid": {"$exists": True, "$nin": list(seen_uids)}, "datetime_local": {"$gt": now_iso}}):
         await db.sessions.delete_one({"_id": gone["_id"]})
         removed += 1
         cl = await db.users.find_one({"_id": ObjectId(gone["user_id"])})
@@ -1183,22 +1187,22 @@ async def send_loyalty_pt_email(client: dict, info: dict) -> bool:
 async def send_free_lesson_email(client: dict, info: dict) -> bool:
     try:
         first = escape((client.get("name") or "Atleta").split(" ")[0])
-        wa = _wa_url(client, f"Ciao! Sono {client.get('name') or ''}, ho sbloccato la lezione gratuita: quando possiamo fissarla?")
+        wa = _wa_url(client, f"Ciao! Sono {client.get('name') or ''}, grazie per la lezione in regalo: quando possiamo fissarla?")
         html = (
             '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0D;padding:32px 16px">'
             '<tr><td align="center"><table role="presentation" width="560" cellpadding="0" cellspacing="0" '
             'style="background:#121218;border:1px solid #262633;border-radius:12px;padding:32px;font-family:Arial,sans-serif">'
             '<tr><td><div style="color:#F5C518;font-size:12px;letter-spacing:3px;text-transform:uppercase">METODOLAU</div>'
-            f'<h1 style="color:#ffffff;font-size:26px;margin:12px 0 8px">Complimenti {first}, hai sbloccato una lezione gratis!</h1>'
-            f'<p style="{BODY};margin:0 0 12px">Hai completato <strong style="color:#F5C518">{info["completed"]} lezioni private</strong> con il tuo Personal Trainer: '
-            'la costanza paga. Come premio, la prossima lezione privata te la offro io.</p>'
+            f'<h1 style="color:#ffffff;font-size:26px;margin:12px 0 8px">{first}, ti regalo una lezione privata!</h1>'
+            f'<p style="{BODY};margin:0 0 12px">Il tuo Personal Trainer ha deciso di <strong style="color:#F5C518">offrirti una lezione privata gratuita</strong>: '
+            'un premio per il tuo impegno e la tua costanza.</p>'
             f'<p style="{BODY};margin:0 0 16px">Scrivimi su WhatsApp per scegliere insieme giorno e ora.</p>'
             f'<a href="{wa}" style="display:inline-block;background:#25D366;color:#ffffff;font-weight:bold;font-size:15px;'
             'text-transform:uppercase;letter-spacing:1px;text-decoration:none;padding:14px 28px;border-radius:8px">Fissa la lezione su WhatsApp</a>'
             f'<p style="color:#52525b;font-size:12px;margin:24px 0 0">Inviata da {escape(EMAIL_FROM_NAME)}.</p>'
             '</td></tr></table></td></tr></table>'
         )
-        return bool(await send_email(to=client["email"], subject=f"{EMAIL_FROM_NAME}: hai sbloccato una lezione gratis!", html=html))
+        return bool(await send_email(to=client["email"], subject=f"{EMAIL_FROM_NAME}: una lezione privata in regalo per te!", html=html))
     except Exception as e:
         logger.error(f"send_free_lesson_email failed: {e}")
         return False
