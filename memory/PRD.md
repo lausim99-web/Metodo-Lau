@@ -118,6 +118,9 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 ## Implemented (2026-06, fork 2 — round 20)
 - Email feedback/scadenza: immagini riassegnate correttamente (feedback = 'Ciao! Come sta andando', expired = 'promemoria scaduti'); rimosso il testo duplicato sotto l'immagine → solo immagine + pulsante WhatsApp + footer
 
+## Implemented (2026-06, fork 2 — round 21)
+- Progressi modificabili: matita su ogni riga → form precompilato 'Modifica rilevazione' → PUT /api/admin/progress/{id}; pulsante Annulla
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template

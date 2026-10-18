@@ -817,6 +817,17 @@ async def delete_photo(file_id: str, _: dict = Depends(require_admin)):
     return {"ok": True}
 
 # ---------- Progress (peso + BIA) ----------
+@api.put("/admin/progress/{progress_id}")
+async def update_progress(progress_id: str, body: ProgressIn, _: dict = Depends(require_admin)):
+    upd = body.model_dump()
+    upd["date"] = upd.get("date") or datetime.now(timezone.utc).date().isoformat()
+    upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+    r = await db.progress.update_one({"id": progress_id}, {"$set": upd})
+    if r.matched_count == 0:
+        raise HTTPException(404, "Rilevazione non trovata")
+    doc = await db.progress.find_one({"id": progress_id}); doc.pop("_id", None)
+    return doc
+
 @api.post("/admin/clients/{client_id}/progress")
 async def add_progress(client_id: str, body: ProgressIn, _: dict = Depends(require_admin)):
     doc = body.model_dump()

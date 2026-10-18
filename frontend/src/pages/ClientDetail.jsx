@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { api, formatErr, API, getToken } from "../api";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart, Clock, Gift, Pencil, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart, Clock, Gift, Pencil, AlertTriangle, Save } from "lucide-react";
 import { METRICS, METRIC_KEYS, emptyProgress } from "../metrics";
 
 const TABS = [
@@ -225,6 +225,8 @@ function PhotosSection({ clientId }) {
 function ProgressSection({ clientId }) {
   const [items, setItems] = useState([]);
   const [f, setF] = useState(emptyProgress());
+  const [editingId, setEditingId] = useState(null);
+  const formRef = React.useRef(null);
   const load = async () => { const r = await api.get(`/admin/clients/${clientId}/progress`); setItems(r.data); };
   useEffect(() => { load(); }, [clientId]);
 
@@ -235,12 +237,27 @@ function ProgressSection({ clientId }) {
       body[k] = body[k] === "" ? null : Number(String(body[k]).replace(",", "."));
     });
     try {
-      await api.post(`/admin/clients/${clientId}/progress`, body);
-      toast.success("Progresso salvato");
-      setF(emptyProgress());
+      if (editingId) {
+        await api.put(`/admin/progress/${editingId}`, body);
+        toast.success("Rilevazione aggiornata");
+      } else {
+        await api.post(`/admin/clients/${clientId}/progress`, body);
+        toast.success("Progresso salvato");
+      }
+      setF(emptyProgress()); setEditingId(null);
       load();
     } catch (e) { toast.error(formatErr(e)); }
   };
+
+  const startEdit = (p) => {
+    const vals = emptyProgress();
+    vals.date = p.date || "";
+    vals.notes = p.notes || "";
+    METRIC_KEYS.forEach((k) => { vals[k] = p[k] == null ? "" : String(p[k]); });
+    setF(vals); setEditingId(p.id);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const cancelEdit = () => { setF(emptyProgress()); setEditingId(null); };
 
   const del = async (id) => {
     if (!window.confirm("Eliminare questa voce?")) return;
@@ -251,9 +268,10 @@ function ProgressSection({ clientId }) {
 
   return (
     <div className="space-y-4">
-      <form onSubmit={add} className="lau-card p-5 space-y-4 lau-in">
+      <form ref={formRef} onSubmit={add} className={`lau-card p-5 space-y-4 lau-in ${editingId ? "border-yellow-500/60" : ""}`} data-testid="progress-form">
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="font-display font-bold uppercase text-white">Nuova rilevazione</div>
+          <div className="font-display font-bold uppercase text-white">{editingId ? "Modifica rilevazione" : "Nuova rilevazione"}</div>
+          {editingId && <span className="text-[10px] uppercase tracking-widest text-yellow-400 font-mono-num" data-testid="progress-editing-badge">In modifica</span>}
           <input type="date" required value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })}
                  data-testid="progress-date"
                  className="bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white [color-scheme:dark]" />
@@ -276,9 +294,14 @@ function ProgressSection({ clientId }) {
         <input placeholder="Note / Conclusione (es. Molto bene, mi raccomando le proteine)" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })}
                data-testid="progress-notes"
                className="w-full bg-[#0A0A0D] border border-[#262633] focus:border-yellow-500 outline-none rounded px-3 py-2 text-sm text-white" />
-        <button type="submit" data-testid="progress-submit" className="lau-gold-btn px-4 py-2 rounded text-sm flex items-center gap-2">
-          <Plus size={16} /> Aggiungi
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="submit" data-testid="progress-submit" className="lau-gold-btn px-4 py-2 rounded text-sm flex items-center gap-2">
+            {editingId ? <><Save size={16} /> Salva modifiche</> : <><Plus size={16} /> Aggiungi</>}
+          </button>
+          {editingId && (
+            <button type="button" onClick={cancelEdit} data-testid="progress-cancel-edit" className="text-sm text-zinc-400 hover:text-white px-3 py-2">Annulla</button>
+          )}
+        </div>
       </form>
 
       <div className="lau-card p-4 overflow-x-auto">
@@ -296,11 +319,14 @@ function ProgressSection({ clientId }) {
             </thead>
             <tbody>
               {items.map((p) => (
-                <tr key={p.id} className="border-b border-[#262633]/50 text-zinc-200" data-testid={`prog-row-${p.id}`}>
+                <tr key={p.id} className={`border-b border-[#262633]/50 text-zinc-200 ${editingId === p.id ? "bg-yellow-400/10" : ""}`} data-testid={`prog-row-${p.id}`}>
                   <td className="py-2 px-2 font-mono-num whitespace-nowrap">{p.date}</td>
                   {METRICS.map((m) => <td key={m.k} className="text-right px-2 font-mono-num">{p[m.k] ?? "-"}</td>)}
                   <td className="px-2 text-zinc-400 text-xs min-w-[10rem]">{p.notes}</td>
-                  <td><button onClick={() => del(p.id)} className="text-zinc-400 hover:text-red-400 px-2"><Trash2 size={14} /></button></td>
+                  <td className="whitespace-nowrap">
+                    <button onClick={() => startEdit(p)} className="text-zinc-400 hover:text-yellow-400 px-2" title="Modifica" data-testid={`prog-edit-${p.id}`}><Pencil size={14} /></button>
+                    <button onClick={() => del(p.id)} className="text-zinc-400 hover:text-red-400 px-2" title="Elimina" data-testid={`prog-del-${p.id}`}><Trash2 size={14} /></button>
+                  </td>
                 </tr>
               ))}
             </tbody>
