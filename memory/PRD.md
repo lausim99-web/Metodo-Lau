@@ -121,6 +121,9 @@ Crea un applicazione dove ogni utente potrà vedere la sua scheda di allenamento
 ## Implemented (2026-06, fork 2 — round 21)
 - Progressi modificabili: matita su ogni riga → form precompilato 'Modifica rilevazione' → PUT /api/admin/progress/{id}; pulsante Annulla
 
+## Implemented (2026-06, fork 2 — round 22)
+- Fedeltà: correzione manuale conteggio (+/−, users.loyalty_offset via POST /loyalty/adjust) e Azzera (POST /loyalty/reset → offset = -completed, notified_level 0). Storico sessioni intatto
+
 ## Backlog (P1)
 - Storico progressione peso per esercizio (grafico recharts)
 - Duplica scheda tra clienti / template

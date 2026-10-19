@@ -1164,6 +1164,10 @@ async def _loyalty(user_id: str) -> dict:
             used += 1
         elif dt <= now:
             completed += 1
+    unlocked = 0
+    user_doc = await db.users.find_one({"_id": ObjectId(user_id)}, {"loyalty_offset": 1}) if ObjectId.is_valid(user_id) else None
+    offset = int((user_doc or {}).get("loyalty_offset") or 0)
+    completed = max(0, completed + offset)
     unlocked = completed // LOYALTY_EVERY
     since = (datetime.now(timezone.utc) - timedelta(days=182)).isoformat()
     canc = [c async for c in db.cancellations.find({"user_id": user_id, "created_at": {"$gte": since}}).sort("created_at", -1)]
@@ -1173,6 +1177,27 @@ async def _loyalty(user_id: str) -> dict:
 
 @api.get("/admin/clients/{client_id}/loyalty")
 async def get_loyalty(client_id: str, _: dict = Depends(require_admin)):
+    return await _loyalty(client_id)
+
+class LoyaltyAdjustIn(BaseModel):
+    delta: int  # +1 / -1 / +4 ...
+
+@api.post("/admin/clients/{client_id}/loyalty/adjust")
+async def adjust_loyalty(client_id: str, body: LoyaltyAdjustIn, _: dict = Depends(require_admin)):
+    """Manual correction (e.g. lessons done before the platform existed)."""
+    if not ObjectId.is_valid(client_id):
+        raise HTTPException(404, "Cliente non trovato")
+    await db.users.update_one({"_id": ObjectId(client_id)}, {"$inc": {"loyalty_offset": body.delta}})
+    return await _loyalty(client_id)
+
+@api.post("/admin/clients/{client_id}/loyalty/reset")
+async def reset_loyalty(client_id: str, _: dict = Depends(require_admin)):
+    """Reset the counter to 0 (history of sessions is kept)."""
+    if not ObjectId.is_valid(client_id):
+        raise HTTPException(404, "Cliente non trovato")
+    await db.users.update_one({"_id": ObjectId(client_id)}, {"$set": {"loyalty_offset": 0, "loyalty_notified_level": 0}})
+    info = await _loyalty(client_id)
+    await db.users.update_one({"_id": ObjectId(client_id)}, {"$set": {"loyalty_offset": -info["completed"]}})
     return await _loyalty(client_id)
 
 async def send_loyalty_pt_email(client: dict, info: dict) -> bool:

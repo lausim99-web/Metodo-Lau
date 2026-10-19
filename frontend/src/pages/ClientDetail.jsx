@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import AppShell from "../components/AppShell";
 import { api, formatErr, API, getToken } from "../api";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart, Clock, Gift, Pencil, AlertTriangle, Save } from "lucide-react";
+import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart, Clock, Gift, Pencil, AlertTriangle, Save, RotateCcw } from "lucide-react";
 import { METRICS, METRIC_KEYS, emptyProgress } from "../metrics";
 
 const TABS = [
@@ -337,9 +337,18 @@ function ProgressSection({ clientId }) {
   );
 }
 
-function LoyaltyCard({ clientId, info, onNotify, busy }) {
+function LoyaltyCard({ clientId, info, onNotify, busy, onChanged }) {
   if (!info) return null;
   const pct = Math.round(((info.completed % info.every) / info.every) * 100);
+  const adjust = async (delta) => {
+    try { const r = await api.post(`/admin/clients/${clientId}/loyalty/adjust`, { delta }); onChanged(r.data); }
+    catch (e) { toast.error(formatErr(e)); }
+  };
+  const reset = async () => {
+    if (!window.confirm("Azzerare il conteggio delle lezioni private? Lo storico delle sessioni resta, riparte solo il conteggio da 0.")) return;
+    try { const r = await api.post(`/admin/clients/${clientId}/loyalty/reset`); onChanged(r.data); toast.success("Conteggio azzerato"); }
+    catch (e) { toast.error(formatErr(e)); }
+  };
   return (
     <div className="lau-card p-5 lau-in border-yellow-500/30" data-testid="loyalty-card">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -365,6 +374,17 @@ function LoyaltyCard({ clientId, info, onNotify, busy }) {
         <div className="h-full bg-yellow-400 transition-all" style={{ width: `${info.available > 0 ? 100 : pct}%` }} />
       </div>
       <div className="flex justify-between text-[10px] font-mono-num text-zinc-500 mt-1"><span>{info.completed % info.every}/{info.every}</span><span>Lezione gratis</span></div>
+      <div className="mt-3 flex items-center gap-2 flex-wrap" data-testid="loyalty-adjust">
+        <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono-num mr-1">Correggi conteggio</span>
+        <button onClick={() => adjust(-1)} disabled={info.completed === 0} data-testid="loyalty-minus" title="Togli una lezione"
+                className="w-8 h-8 rounded border border-[#262633] text-zinc-200 hover:border-yellow-500/60 disabled:opacity-30 font-bold">−</button>
+        <button onClick={() => adjust(1)} data-testid="loyalty-plus" title="Aggiungi una lezione (es. fatta prima della piattaforma)"
+                className="w-8 h-8 rounded border border-[#262633] text-zinc-200 hover:border-yellow-500/60 font-bold">+</button>
+        <button onClick={reset} data-testid="loyalty-reset"
+                className="ml-auto flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-red-500/40 text-red-300 hover:bg-red-500/10">
+          <RotateCcw size={12} /> Azzera
+        </button>
+      </div>
       <div className={`mt-3 flex items-start gap-2 text-xs rounded-lg p-3 border ${info.cancellations_6m >= 2 ? "border-red-500/50 bg-red-500/10 text-red-200" : "border-[#262633] bg-[#0A0A0D] text-zinc-400"}`} data-testid="loyalty-cancellations">
         <AlertTriangle size={14} className={`shrink-0 mt-0.5 ${info.cancellations_6m >= 2 ? "text-red-400" : "text-yellow-400"}`} />
         <div>
@@ -430,7 +450,7 @@ function SessionsSection({ clientId }) {
 
   return (
     <div className="space-y-4">
-      <LoyaltyCard clientId={clientId} info={loyalty} onNotify={notify} busy={busy} />
+      <LoyaltyCard clientId={clientId} info={loyalty} onNotify={notify} busy={busy} onChanged={setLoyalty} />
       <form onSubmit={add} className="lau-card p-5 space-y-3 lau-in">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="font-display font-bold uppercase text-white">Nuova sessione privata</div>
