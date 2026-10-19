@@ -4,7 +4,7 @@ import AppShell from "../components/AppShell";
 import { api, formatErr, API, getToken } from "../api";
 import { toast } from "sonner";
 import { ArrowLeft, Upload, FileText, Trash2, Image as ImageIcon, Activity, Dumbbell, Utensils, Plus, Eye, Calendar, MessageSquareHeart, Clock, Gift, Pencil, AlertTriangle, Save, RotateCcw } from "lucide-react";
-import { METRICS, METRIC_KEYS, emptyProgress } from "../metrics";
+import { METRICS, METRIC_KEYS, emptyProgress, fmtDate } from "../metrics";
 
 const TABS = [
   { key: "workouts", label: "Schede Allenamento", icon: Dumbbell },
@@ -320,7 +320,7 @@ function ProgressSection({ clientId }) {
             <tbody>
               {items.map((p) => (
                 <tr key={p.id} className={`border-b border-[#262633]/50 text-zinc-200 ${editingId === p.id ? "bg-yellow-400/10" : ""}`} data-testid={`prog-row-${p.id}`}>
-                  <td className="py-2 px-2 font-mono-num whitespace-nowrap">{p.date}</td>
+                  <td className="py-2 px-2 font-mono-num whitespace-nowrap" data-testid={`prog-date-${p.id}`}>{fmtDate(p.date)}</td>
                   {METRICS.map((m) => <td key={m.k} className="text-right px-2 font-mono-num">{p[m.k] ?? "-"}</td>)}
                   <td className="px-2 text-zinc-400 text-xs min-w-[10rem]">{p.notes}</td>
                   <td className="whitespace-nowrap">
@@ -347,6 +347,11 @@ function LoyaltyCard({ clientId, info, onNotify, busy, onChanged }) {
   const reset = async () => {
     if (!window.confirm("Azzerare il conteggio delle lezioni private? Lo storico delle sessioni resta, riparte solo il conteggio da 0.")) return;
     try { const r = await api.post(`/admin/clients/${clientId}/loyalty/reset`); onChanged(r.data); toast.success("Conteggio azzerato"); }
+    catch (e) { toast.error(formatErr(e)); }
+  };
+  const resetCanc = async () => {
+    if (!window.confirm("Azzerare le disdette registrate per questo atleta?")) return;
+    try { const r = await api.delete(`/admin/clients/${clientId}/cancellations`); onChanged(r.data); toast.success("Disdette azzerate"); }
     catch (e) { toast.error(formatErr(e)); }
   };
   return (
@@ -390,8 +395,14 @@ function LoyaltyCard({ clientId, info, onNotify, busy, onChanged }) {
         <div>
           <strong className={info.cancellations_6m >= 2 ? "text-red-300" : "text-white"}>{info.cancellations_6m} {info.cancellations_6m === 1 ? "disdetta" : "disdette"} negli ultimi 6 mesi</strong>
           {info.cancellations_6m >= 2 && <span> — dalla prossima disdetta la lezione è <strong>a pagamento</strong>.</span>}
-          {info.cancellation_dates?.length > 0 && <div className="text-[10px] font-mono-num mt-1 opacity-80">Lezioni disdette: {info.cancellation_dates.join(" · ")}</div>}
+          {info.cancellation_dates?.length > 0 && <div className="text-[10px] font-mono-num mt-1 opacity-80">Lezioni disdette: {info.cancellation_dates.map(fmtDate).join(" · ")}</div>}
           <div className="text-[10px] mt-1 opacity-80">{info.policy}</div>
+          {info.cancellations_6m > 0 && (
+            <button onClick={resetCanc} data-testid="cancellations-reset"
+                    className="mt-2 flex items-center gap-1 px-3 py-1.5 rounded text-xs border border-[#262633] text-zinc-200 hover:border-yellow-500/60">
+              <RotateCcw size={12} /> Azzera disdette
+            </button>
+          )}
         </div>
       </div>
     </div>

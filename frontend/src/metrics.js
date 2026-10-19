@@ -18,6 +18,14 @@ export const METRIC_KEYS = METRICS.map((m) => m.k);
 
 export const emptyProgress = () => Object.fromEntries([["date", ""], ...METRIC_KEYS.map((k) => [k, ""]), ["notes", ""]]);
 
+
+// "2026-10-19" -> "19/10/2026" (formato italiano)
+export const fmtDate = (iso) => {
+  if (!iso) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+};
+
 // variazione rispetto alla rilevazione precedente (es. "-2,3")
 export const delta = (curr, prev) => {
   if (curr == null || prev == null) return null;

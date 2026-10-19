@@ -6,7 +6,7 @@ import { api, API, getToken, formatErr } from "../api";
 import { useAuth } from "../auth";
 import { toast } from "sonner";
 import PdfViewer from "../components/PdfViewer";
-import { METRICS, delta } from "../metrics";
+import { METRICS, delta, fmtDate } from "../metrics";
 import { Dumbbell, Utensils, Image as ImageIcon, Activity, FileText, Download, Eye, Calendar, PlayCircle, Clock, X, AlertTriangle } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 
@@ -243,6 +243,7 @@ function ProgressTab() {
                   contentStyle={{ background: "#121218", border: "1px solid #262633", borderRadius: 8, color: "#fff" }}
                   labelStyle={{ color: "#F5C518", fontFamily: "JetBrains Mono, monospace", fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase" }}
                   formatter={(v) => [`${v}${activeMetric.unit ? " " + activeMetric.unit : ""}`, activeMetric.label]}
+                  labelFormatter={(d) => fmtDate(d)}
                 />
                 <Line type="monotone" dataKey="value" stroke={activeMetric.color} strokeWidth={2.5}
                       dot={{ r: 4, fill: activeMetric.color, stroke: "#0A0A0D", strokeWidth: 2 }}
@@ -265,7 +266,7 @@ function ProgressTab() {
           <tbody>
             {items.map((p) => (
               <tr key={p.id} className="border-b border-[#262633]/50 text-zinc-200">
-                <td className="py-2 px-2 font-mono-num whitespace-nowrap">{p.date}</td>
+                <td className="py-2 px-2 font-mono-num whitespace-nowrap" data-testid={`me-prog-date-${p.id}`}>{fmtDate(p.date)}</td>
                 {shown.map((m) => <td key={m.k} className="text-right px-2 font-mono-num">{p[m.k] ?? "-"}</td>)}
                 <td className="px-2 text-zinc-400 text-xs min-w-[10rem]">{p.notes}</td>
               </tr>

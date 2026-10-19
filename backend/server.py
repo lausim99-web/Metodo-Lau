@@ -1190,6 +1190,11 @@ async def adjust_loyalty(client_id: str, body: LoyaltyAdjustIn, _: dict = Depend
     await db.users.update_one({"_id": ObjectId(client_id)}, {"$inc": {"loyalty_offset": body.delta}})
     return await _loyalty(client_id)
 
+@api.delete("/admin/clients/{client_id}/cancellations")
+async def reset_cancellations(client_id: str, _: dict = Depends(require_admin)):
+    await db.cancellations.delete_many({"user_id": client_id})
+    return await _loyalty(client_id)
+
 @api.post("/admin/clients/{client_id}/loyalty/reset")
 async def reset_loyalty(client_id: str, _: dict = Depends(require_admin)):
     """Reset the counter to 0 (history of sessions is kept)."""
