@@ -152,7 +152,7 @@ function PhotosTab() {
               {p.tag}
             </div>
             <div className="text-[10px] p-2 text-zinc-400 font-mono-num">
-              {p.photo_date || new Date(p.uploaded_at).toLocaleDateString("it-IT")}
+              {fmtDate(p.photo_date) || new Date(p.uploaded_at).toLocaleDateString("it-IT")}
               {p.notes && <div className="text-xs text-zinc-200 normal-case tracking-normal font-sans mt-1 line-clamp-3" data-testid={`me-photo-notes-${p.id}`}>{p.notes}</div>}
             </div>
           </button>
@@ -167,7 +167,7 @@ function PhotosTab() {
           </button>
           <img src={blobs[big.id]} alt="preview" className="max-w-full max-h-[70vh] rounded" />
           <div className="mt-3 text-center max-w-md" onClick={(e) => e.stopPropagation()}>
-            <div className="text-[10px] uppercase tracking-widest text-yellow-400 font-mono-num">{big.tag} · {big.photo_date || new Date(big.uploaded_at).toLocaleDateString("it-IT")}</div>
+            <div className="text-[10px] uppercase tracking-widest text-yellow-400 font-mono-num">{big.tag} · {fmtDate(big.photo_date) || new Date(big.uploaded_at).toLocaleDateString("it-IT")}</div>
             {big.notes && <div className="text-sm text-zinc-100 mt-1" data-testid="photo-lightbox-notes">{big.notes}</div>}
           </div>
           <div className="absolute bottom-4 text-[10px] uppercase tracking-widest text-zinc-500 font-mono-num">Tocca la X o la foto per chiudere</div>

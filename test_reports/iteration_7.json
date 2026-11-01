@@ -1,0 +1,35 @@
+{
+  "summary": "Iter 7 — Date formatting (dd/mm/yyyy) + Cancellations reset. Backend: 3/3 pytest tests passed (progress ISO roundtrip, cancellation+reset flow, loyalty +/- regression). Frontend PT: progress table prog-date-* all dd/mm/yyyy; loyalty-card shows '1 disdetta negli ultimi 6 mesi' + 'Lezioni disdette: 24/10/2026' after a by_athlete cancel, cancellations-reset button is visible and disappears after confirm (count returns to 0). Frontend Athlete: me-prog-date-* all dd/mm/yyyy; chart tooltip shows '05/01/2026'; photos tab initially SHOWED ISO ('2026-03-01' etc) — fixed by wrapping photo_date with fmtDate() in ClientDashboard.jsx (card + lightbox) and ClientDetail.jsx (admin preview). Re-tested: ISO occurrences = 0, dates '01/03/2026', '02/02/2026', '05/01/2026' now shown. No console errors (only pre-existing React hydration warnings from visual-editor <span> inside <option>, unrelated to this iteration). No horizontal overflow at 390px.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PhotosTab (ClientDashboard.jsx) & admin photo list (ClientDetail.jsx)", "issue": "photo_date was rendered raw (ISO 2026-MM-DD) instead of dd/mm/yyyy. Fixed by wrapping with fmtDate().", "selector": "photo cards + photo-lightbox + admin PhotosSection", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin → Mario → Sessioni → Nuova sessione privata", "issues": ["'Data' field uses native browser date picker (placeholder 'mm/dd/yyyy') instead of a localized shadcn/Italian date picker — minor pre-existing UX issue, out of iter 7 scope."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter7_dates_reset.py", "/app/test_reports/pytest/iter7.xml"],
+  "action_items": [
+    "No functional items pending for iter 7 (photo_date fix applied by testing agent).",
+    "Nice-to-have (future): replace native date pickers in admin session/progress forms with the localized shadcn calendar."
+  ],
+  "critical_code_review_comments": [
+    "fmtDate() in metrics.js only handles YYYY-MM-DD; returns input unchanged for other formats — safe fallback, OK.",
+    "DELETE /api/admin/clients/{client_id}/cancellations does not validate ObjectId; it just deletes by string user_id. Non-blocking because the cancellations collection stores user_id as string. However it does not check that the client exists (returns loyalty of empty collection). Low priority.",
+    "_loyalty filters cancellations_6m by created_at >= 182 days — correct window; cancellation_dates returned as ISO strings, formatted on the frontend via fmtDate — OK.",
+    "ClientDashboard.jsx:155/170 and ClientDetail.jsx:214 now use fmtDate(photo_date) — matches the stated iter 7 fix."
+  ],
+  "updated_files": [
+    "/app/frontend/src/pages/ClientDashboard.jsx",
+    "/app/frontend/src/pages/ClientDetail.jsx",
+    "/app/backend/tests/test_iter7_dates_reset.py"
+  ],
+  "success_rate": {"backend": "100% (3/3)", "frontend": "100% after photo_date fix"},
+  "test_credentials": "Admin lausim99@gmail.com/Metodolau · Athlete mario.rossi@example.com/Mario2026!",
+  "seed_data_creation": "During UI test, created+cancelled one future session for Mario via by_athlete=1 then reset cancellations through the UI button — final state clean (cancellations_6m=0). Backend pytest also creates/deletes a temp progress row and a cancellation; all cleaned up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "iter 7 scope fully verified. Photo date fix applied here (3 lines). The /admin/clients/{id}/sessions form still uses the native browser date picker — leave as design feedback. Prior iterations 1–6 cover older flows."
+}
